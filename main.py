@@ -5,7 +5,7 @@ import uiautomation as auto
 import keyboard
 
 # ================= 配置区 =================
-DOUBLE_CLICK_THRESHOLD = 0.3  # 双击判定时间间隔 (秒)
+DOUBLE_CLICK_THRESHOLD = 0.2  # 双击判定时间间隔 (秒)
 DEBUG_MODE = True             # 开启后会在控制台打印点击信息，方便调试
 # ==========================================
 
