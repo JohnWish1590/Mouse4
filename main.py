@@ -5,6 +5,7 @@ import os
 import sys
 import webbrowser
 
+# 引入依赖库
 from pynput import mouse
 import uiautomation as auto
 import keyboard
@@ -12,9 +13,8 @@ import pystray
 from PIL import Image
 
 # ================= 配置区 =================
-DOUBLE_CLICK_THRESHOLD = 0.25
-DEBUG_MODE = True
-# 1. 修复：更新为正确的 GitHub 地址
+DOUBLE_CLICK_THRESHOLD = 0.25  # 双击判定时间
+DEBUG_MODE = True              # 调试模式
 GITHUB_URL = "https://github.com/JohnWish1590/Mouse4" 
 APP_NAME = "Mouse4"
 # ==========================================
@@ -42,6 +42,7 @@ class MouseMonitor:
             self.last_click_time = current_time
 
 def is_drive_or_file(element):
+    """ 判断是否点到了文件/图标 """
     current = element
     try:
         for i in range(5): 
@@ -53,21 +54,37 @@ def is_drive_or_file(element):
     except: pass
     return False
 
+# --- 关键修改在这里 ---
 def process_worker():
-    while True:
-        try:
-            x, y = action_queue.get(timeout=1)
-            element = auto.ControlFromPoint(x, y)
-            top_window = element.GetTopLevelControl()
-            if not top_window or top_window.ClassName != "CabinetWClass": continue
-            if not is_drive_or_file(element):
-                if DEBUG_MODE: print(">>> 空白处双击，返回上一级")
-                keyboard.send('alt+up')
-        except queue.Empty: continue
-        except Exception as e:
-            if DEBUG_MODE: print(f"Error: {e}")
+    print(">>> 工作线程已启动，等待双击...")
+    
+    # 【修复重点】告诉 Windows：这个后台线程也要用自动化组件
+    with auto.UIAutomationInitializerInThread():
+        while True:
+            try:
+                x, y = action_queue.get(timeout=1)
+                
+                if DEBUG_MODE: print(f"检测到双击位置: {x}, {y}")
+                
+                element = auto.ControlFromPoint(x, y)
+                top_window = element.GetTopLevelControl()
+                
+                if not top_window or top_window.ClassName != "CabinetWClass":
+                    if DEBUG_MODE: print("忽略：不是在资源管理器窗口")
+                    continue
 
-# --- 托盘菜单逻辑 ---
+                if is_drive_or_file(element):
+                    if DEBUG_MODE: print("忽略：点到了文件或图标")
+                else:
+                    if DEBUG_MODE: print(">>> 判定为空白处！执行 Alt+Up")
+                    keyboard.send('alt+up')
+                    
+            except queue.Empty:
+                continue
+            except Exception as e:
+                # 这里打印错误但不崩溃，方便调试
+                if DEBUG_MODE: print(f"Work Error: {e}")
+
 def on_open_github(icon, item):
     webbrowser.open(GITHUB_URL)
 
@@ -79,31 +96,33 @@ def run_tray_icon():
     icon_path = resource_path("logo.ico")
     
     if not os.path.exists(icon_path):
-        return
-
-    image = Image.open(icon_path)
-    
-    # 2. 尝试修复：强制重新调整图片大小为标准托盘尺寸 (64x64)
-    # 这有助于让 Windows 更准确地渲染它，而不是缩小得过分
-    image = image.resize((64, 64), Image.Resampling.LANCZOS)
+        print("未找到图标文件，使用默认红点")
+        image = Image.new('RGB', (64, 64), color='red')
+    else:
+        image = Image.open(icon_path)
+        image = image.resize((256, 256), Image.Resampling.LANCZOS)
     
     menu = (
-        pystray.MenuItem(f'{APP_NAME} 正在运行', lambda icon, item: None, enabled=False),
+        pystray.MenuItem(f'{APP_NAME} 运行中...', lambda icon, item: None, enabled=False),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem('给作者留言 (GitHub)', on_open_github),
-        pystray.MenuItem('退出 (Exit)', on_exit)
+        pystray.MenuItem('访问 GitHub', on_open_github),
+        pystray.MenuItem('退出程序', on_exit)
     )
 
     icon = pystray.Icon("Mouse4", image, "Mouse4 双击空白返回", menu)
     icon.run()
 
 def main():
-    print("Mouse4 启动中...")
+    print("=== Mouse4 启动中 (V7 修复版) ===")
+    
     monitor = MouseMonitor()
     listener = mouse.Listener(on_click=monitor.on_click)
     listener.start()
+    
     t = threading.Thread(target=process_worker, daemon=True)
     t.start()
+    
+    print("程序已最小化到托盘。")
     run_tray_icon()
 
 if __name__ == "__main__":
