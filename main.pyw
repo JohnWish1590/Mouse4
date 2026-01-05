@@ -4,47 +4,53 @@ import ctypes
 import datetime
 import threading
 import time
-import webbrowser  # 用于打开网页
+import webbrowser
 
-# ================= 1. 右键粘贴保存模式 (静默无弹窗) =================
+# ================= 资源路径定位函数 =================
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# ================= 1. 右键粘贴保存模式 =================
 def run_paste_mode_safe(args):
     try:
         from PIL import ImageGrab
     except ImportError:
-        ctypes.windll.user32.MessageBoxW(0, "缺少 Pillow 库，请运行 pip install pillow", "错误", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, "缺少 Pillow 库", "错误", 0x10)
         sys.exit(1)
 
     try:
+        target_folder = os.getcwd()
         if len(args) > 2:
-            raw_path = " ".join(args[2:])
-            target_folder = raw_path.strip('"').strip()
-        else:
-            target_folder = os.getcwd()
+            try:
+                idx = args.index('--paste')
+                if idx + 1 < len(args):
+                    raw_path = " ".join(args[idx+1:])
+                    target_folder = raw_path.strip('"').strip()
+            except ValueError:
+                pass
 
         if not target_folder or not os.path.exists(target_folder):
             desktop = os.path.join(os.path.expanduser("~"), "Desktop")
             target_folder = desktop
 
         img = ImageGrab.grabclipboard()
-        
         if img is None:
-            ctypes.windll.user32.MessageBoxW(0, "剪贴板里是空的 (或者不是图片)！\n请先按 F1 截图。", "保存失败", 0x30)
+            ctypes.windll.user32.MessageBoxW(0, "剪贴板为空或不是图片", "提示", 0x30)
             sys.exit(0)
             
         t_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         fname = f"Screenshot_{t_str}.png"
         save_path = os.path.join(target_folder, fname)
-        
         img.save(save_path, "PNG")
-        
-        # 静默退出，无弹窗
         sys.exit(0)
             
     except Exception as e:
-        ctypes.windll.user32.MessageBoxW(0, f"程序错误:\n{str(e)}", "错误", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, f"Error: {str(e)}", "Error", 0x10)
         sys.exit(1)
 
-if len(sys.argv) > 1 and sys.argv[1] == '--paste':
+if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
 # ================= 2. 主程序设置 =================
@@ -59,8 +65,9 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu,
                              QInputDialog, QLabel, QVBoxLayout, QMessageBox, QStyle)
 from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject, 
                           QPropertyAnimation, QEasingCurve, QTimer)
+# [修改] 补充导入了 QBrush 和 QPixmap 用于画圆
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
-                         QFont, QIcon)
+                         QFont, QIcon, QBrush, QPixmap)
 import keyboard
 import mss
 import winreg
@@ -132,19 +139,23 @@ class RegistryManager:
     
     def install(self):
         try:
-            python_exe = sys.executable
-            if "pythonw.exe" not in python_exe and "python.exe" in python_exe:
-                python_exe = python_exe.replace("python.exe", "pythonw.exe")
-            
-            script_path = os.path.abspath(__file__)
-            if script_path.endswith('.py') and os.path.exists(script_path + 'w'):
-                script_path = script_path + 'w'
-            
-            command_str = f'"{python_exe}" "{script_path}" --paste "%V"'
+            if getattr(sys, 'frozen', False):
+                exe_path = sys.executable
+                command_str = f'"{exe_path}" --paste "%V"'
+            else:
+                python_exe = sys.executable
+                if "pythonw.exe" not in python_exe and "python.exe" in python_exe:
+                    python_exe = python_exe.replace("python.exe", "pythonw.exe")
+                script_path = os.path.abspath(__file__)
+                if script_path.endswith('.py') and os.path.exists(script_path + 'w'):
+                    script_path = script_path + 'w'
+                command_str = f'"{python_exe}" "{script_path}" --paste "%V"'
             
             key = winreg.CreateKey(self.base_key, self.key_path)
             winreg.SetValue(key, "", winreg.REG_SZ, config.context_menu_text)
-            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, "imageres.dll,-5302")
+            
+            icon_path = sys.executable if getattr(sys, 'frozen', False) else "imageres.dll,-5302"
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon_path)
             winreg.CloseKey(key)
             
             cmd_key = winreg.CreateKey(self.base_key, self.key_path + r"\command")
@@ -204,7 +215,7 @@ class SnippingWindow(QWidget):
         self.begin = QPoint()
         self.end = QPoint()
         self.is_snipping = False
-        self.show()
+        self.showFullScreen()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -250,10 +261,16 @@ class SnippingWindow(QWidget):
 
     def capture(self, x, y, w, h):
         try:
+            dpr = self.screen().devicePixelRatio()
+            real_x = int(x * dpr)
+            real_y = int(y * dpr)
+            real_w = int(w * dpr)
+            real_h = int(h * dpr)
             with mss.mss() as sct:
-                monitor = {"top": y, "left": x, "width": w, "height": h, "mon": -1}
+                monitor = {"top": real_y, "left": real_x, "width": real_w, "height": real_h, "mon": -1}
                 img = sct.grab(monitor)
                 qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
+                qimg.setDevicePixelRatio(dpr)
                 QApplication.clipboard().setImage(qimg)
         except Exception as e:
             print(f"Error: {e}")
@@ -278,35 +295,41 @@ def do_show_toast(x, y):
     toast = SuccessToast("Saved!")
     toast.show_animation(x, y)
 
-def change_hotkey():
-    txt, ok = QInputDialog.getText(None, "设置", "新热键:", text=config.hotkey)
-    if ok and txt:
-        try:
-            keyboard.remove_hotkey(comm.trigger_screenshot.emit)
-            keyboard.add_hotkey(txt, comm.trigger_screenshot.emit)
-            config.hotkey = txt
-            tray_icon.showMessage("成功", f"热键已更新: {txt}")
-        except: tray_icon.showMessage("失败", "无效热键")
-
-def change_speed():
-    val, ok = QInputDialog.getDouble(
-        None, 
-        "设置 返回上一层文件夹双击速度", 
-        "双击判定间隔 (秒):\n(默认0.3，越小越难触发，越大越容易误触)", 
-        value=config.double_click_speed, 
-        min=0.1, max=2.0, decimals=2
-    )
-    if ok:
-        config.double_click_speed = val
-        tray_icon.showMessage("设置更新", f"速度已调整为: {val}秒")
-
-# 打开 GitHub 主页
 def open_github():
     webbrowser.open(config.github_url)
 
 def setup_tray(app):
     global tray_icon
-    icon = QIcon(config.icon_filename) if os.path.exists(config.icon_filename) else app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+    icon_path = resource_path(config.icon_filename)
+    
+    # [关键修改] 如果找到图片，强制把它画成圆的
+    if os.path.exists(icon_path):
+        # 1. 加载原图
+        src_img = QImage(icon_path)
+        size = src_img.size()
+        
+        # 2. 创建一张空的透明图（作为画布）
+        out_img = QImage(size, QImage.Format.Format_ARGB32)
+        out_img.fill(Qt.GlobalColor.transparent)
+        
+        # 3. 开始绘画
+        painter = QPainter(out_img)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing) # 开启抗锯齿，边缘更平滑
+        
+        # 4. 创建画刷（把原图当成颜料）
+        brush = QBrush(src_img)
+        painter.setBrush(brush)
+        painter.setPen(Qt.PenStyle.NoPen) # 不要边框
+        
+        # 5. 画一个圆（因为颜料是原图，所以圆里面就是图片内容，四角被切掉了）
+        painter.drawEllipse(0, 0, size.width(), size.height())
+        painter.end()
+        
+        # 6. 生成图标
+        icon = QIcon(QPixmap.fromImage(out_img))
+    else:
+        icon = app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        
     tray_icon = QSystemTrayIcon(icon, app)
     menu = QMenu()
     
@@ -316,11 +339,6 @@ def setup_tray(app):
     rmenu = menu.addMenu("右键保存功能 (管理)")
     rmenu.addAction("开启: 添加到系统右键", lambda: QMessageBox.information(None, "GeekPaste", reg_manager.install()[1]))
     rmenu.addAction("关闭: 从右键移除", lambda: QMessageBox.information(None, "GeekPaste", reg_manager.uninstall()[1]))
-    
-    menu.addSeparator()
-    # [修改点] 更改了菜单文字
-    menu.addAction("设置截图热键...", change_hotkey)
-    menu.addAction("设置 返回上一层文件夹双击速度...", change_speed)
     
     menu.addSeparator()
     menu.addAction("访问 GitHub 主页", open_github)
@@ -343,5 +361,5 @@ if __name__ == '__main__':
     try: keyboard.add_hotkey(config.hotkey, comm.trigger_screenshot.emit)
     except: pass
     
-    print("GeekTool V33 (Label Updated) Started.")
+    print("GeekTool V40 (Round Icon) Started.")
     sys.exit(app.exec())
