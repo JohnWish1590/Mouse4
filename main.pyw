@@ -5,6 +5,7 @@ import datetime
 import threading
 import time
 import webbrowser
+import math
 
 # ================= 资源路径定位函数 =================
 def resource_path(relative_path):
@@ -62,12 +63,12 @@ except:
 
 # ================= 3. 导入 GUI =================
 from PyQt6.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu, 
-                             QInputDialog, QLabel, QVBoxLayout, QMessageBox, QStyle)
+                             QInputDialog, QLabel, QVBoxLayout, QHBoxLayout, 
+                             QMessageBox, QStyle, QPushButton, QFrame, QLineEdit, QComboBox)
 from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject, 
-                          QPropertyAnimation, QEasingCurve, QTimer)
-# [修改] 补充导入了 QBrush 和 QPixmap 用于画圆
+                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
-                         QFont, QIcon, QBrush, QPixmap)
+                         QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
 import keyboard
 import mss
 import winreg
@@ -76,7 +77,8 @@ import winreg
 class GlobalConfig:
     hotkey = 'ctrl+1'              
     double_click_speed = 0.3       
-    theme_color = QColor('#00FF00')
+    theme_color = QColor('#00FF00') 
+    default_draw_color = QColor('#FF0000') 
     border_width = 2
     icon_filename = 'logo.ico'
     github_url = "https://github.com/JohnWish1590/Mouse4"
@@ -173,7 +175,7 @@ class RegistryManager:
             return True, "已移除右键菜单。"
         except: return True, "未安装。"
 
-# ================= 7. 截图功能 =================
+# ================= 7. 截图功能 & 绘画核心 =================
 class SignalComm(QObject):
     trigger_screenshot = pyqtSignal()
     show_toast = pyqtSignal(int, int)
@@ -205,34 +207,373 @@ class SuccessToast(QWidget):
         self.anim.start()
         QTimer.singleShot(50, lambda: self.move(self.x(), self.y()-2))
 
+class ColorButton(QPushButton):
+    def __init__(self, color, parent=None):
+        super().__init__(parent)
+        self.color = QColor(color)
+        self.setFixedSize(24, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCheckable(True)
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.color.name()};
+                border-radius: 12px;
+                border: 2px solid #555555;
+            }}
+            QPushButton:hover {{
+                border: 2px solid #FFFFFF;
+            }}
+            QPushButton:checked {{
+                border: 3px solid #FFFFFF;
+            }}
+        """)
+
+class OverlayInput(QLineEdit):
+    def __init__(self, parent, pos, color, font_size):
+        super().__init__(parent)
+        self.move(pos)
+        self.setPlaceholderText("") 
+        self.color = color
+        self.font_size = font_size
+        self.update_style()
+        self.adjustSize()
+        self.setFocus()
+        self.textChanged.connect(self.adjust_width)
+        
+    def update_style(self):
+        self.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent;
+                border: 1px dashed rgba(255, 255, 255, 0.5);
+                color: {self.color.name()};
+                font-family: "Microsoft YaHei";
+                font-size: {self.font_size}px;
+                font-weight: bold;
+                padding: 2px;
+            }}
+        """)
+        self.adjust_width()
+        
+    def adjust_width(self):
+        fm = self.fontMetrics()
+        w = fm.horizontalAdvance(self.text()) + 30
+        self.setFixedWidth(max(50, w))
+        self.setFixedHeight(fm.height() + 10)
+
+class SnippingToolBar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+        
+        # 1. 工具条
+        self.tools_widget = QWidget()
+        self.tools_widget.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                border-radius: 6px;
+                border: 1px solid #444444;
+            }
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                color: #B0B0B0;
+                font-size: 20px;
+                font-family: "Segoe UI Symbol", "Arial";
+                padding: 6px 10px;
+                border-radius: 4px;
+                min-width: 30px;
+                min-height: 30px;
+            }
+            QPushButton:hover {
+                background-color: #3f3f3f;
+                color: white;
+            }
+            QPushButton:checked {
+                background-color: #4a4a4a;
+                color: #07c160;
+            }
+        """)
+        tools_layout = QHBoxLayout(self.tools_widget)
+        tools_layout.setContentsMargins(10, 8, 10, 8)
+        tools_layout.setSpacing(8)
+        
+        self.btn_rect = QPushButton("⬜")
+        self.btn_rect.setCheckable(True)
+        self.btn_rect.setToolTip("矩形")
+        
+        self.btn_ellipse = QPushButton("⭕")
+        self.btn_ellipse.setCheckable(True)
+        self.btn_ellipse.setToolTip("圆形")
+        
+        self.btn_arrow = QPushButton("↗")
+        self.btn_arrow.setCheckable(True)
+        self.btn_arrow.setToolTip("箭头")
+        
+        self.btn_pen = QPushButton("✎")
+        self.btn_pen.setCheckable(True)
+        self.btn_pen.setToolTip("画笔")
+        
+        self.btn_text = QPushButton("T")
+        self.btn_text.setCheckable(True)
+        self.btn_text.setFont(QFont("Times New Roman", 18, QFont.Weight.Bold))
+        self.btn_text.setToolTip("文字")
+        
+        self.btn_undo = QPushButton("↶")
+        self.btn_undo.setToolTip("撤销")
+        
+        line = QLabel("|")
+        line.setStyleSheet("color: #555555; margin: 0px 5px;")
+        
+        self.btn_cancel = QPushButton("✕")
+        self.btn_cancel.setStyleSheet("color: #ff5f57; font-weight: bold;") 
+        self.btn_ok = QPushButton("✓")
+        self.btn_ok.setStyleSheet("color: #07c160; font-weight: bold; font-size: 22px;")
+
+        tools_layout.addWidget(self.btn_rect)
+        tools_layout.addWidget(self.btn_ellipse)
+        tools_layout.addWidget(self.btn_arrow)
+        tools_layout.addWidget(self.btn_pen)
+        tools_layout.addWidget(self.btn_text)
+        tools_layout.addWidget(self.btn_undo)
+        tools_layout.addWidget(line)
+        tools_layout.addWidget(self.btn_cancel)
+        tools_layout.addWidget(self.btn_ok)
+        
+        # 2. 底部属性条 (字号 + 颜色)
+        self.colors_widget = QWidget()
+        self.colors_widget.setStyleSheet("background-color: #2b2b2b; border-radius: 6px; border: 1px solid #444444;")
+        bottom_layout = QHBoxLayout(self.colors_widget)
+        bottom_layout.setContentsMargins(10, 6, 10, 6)
+        bottom_layout.setSpacing(10)
+        
+        # 字号下拉框
+        self.size_combo = QComboBox()
+        self.size_combo.addItems([str(s) for s in [12, 14, 16, 18, 24, 36, 48, 64, 72]])
+        self.size_combo.setCurrentText("18")
+        self.size_combo.setFixedWidth(68)
+        
+        # 上下箭头 SVG
+        arrow_svg = """url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 15l5 5 5-5'/%3E%3Cpath d='M7 9l5-5 5 5'/%3E%3C/svg%3E")"""
+        
+        self.size_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #3f3f3f;
+                color: white;
+                border: 1px solid #555555;
+                border-radius: 4px;
+                padding: 2px 0px 2px 10px;
+                font-family: "Arial";
+                font-weight: bold;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 24px;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+            }}
+            QComboBox::down-arrow {{
+                image: {arrow_svg};
+                width: 14px;
+                height: 14px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #2b2b2b;
+                color: white;
+                selection-background-color: #07c160;
+                outline: none;
+                min-width: 60px;
+            }}
+        """)
+        bottom_layout.addWidget(self.size_combo)
+        
+        # 分割线 (QFrame)
+        # [修复点1] 将 line_sep 绑定到 self.line_sep，使其成为类属性
+        self.line_sep = QFrame()
+        self.line_sep.setFrameShape(QFrame.Shape.VLine)
+        self.line_sep.setFrameShadow(QFrame.Shadow.Plain)
+        self.line_sep.setFixedWidth(1)
+        self.line_sep.setFixedHeight(16)
+        self.line_sep.setStyleSheet("background-color: #555555; border: none;")
+        bottom_layout.addWidget(self.line_sep)
+
+        self.colors = ['#FF0000', '#FFCC00', '#07c160', '#1E90FF', '#00FFFF', '#FF00FF', '#FFFFFF', '#000000']
+        self.color_btns = []
+        for c in self.colors:
+            btn = ColorButton(c)
+            self.color_btns.append(btn)
+            bottom_layout.addWidget(btn)
+            
+        self.selected_color = QColor('#FF0000')
+        self.color_btns[0].setChecked(True)
+        
+        self.main_layout.addWidget(self.tools_widget)
+        self.main_layout.addWidget(self.colors_widget)
+        self.colors_widget.hide()
+        
+        self.setLayout(self.main_layout)
+
 class SnippingWindow(QWidget):
     def __init__(self, screen_info):
         super().__init__()
         self.screen_info = screen_info
-        self.setGeometry(screen_info.geometry())
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setGeometry(screen_info.geometry())
+        self.showFullScreen()
+        
+        self.full_screenshot = self.grab_full_screen()
+        
         self.begin = QPoint()
         self.end = QPoint()
-        self.is_snipping = False
-        self.showFullScreen()
+        self.is_selecting = False
+        self.has_selected = False
+        
+        self.draw_mode = None 
+        self.drawings = []
+        self.current_drawing = None 
+        self.current_color = config.default_draw_color
+        self.current_font_size = 18 
+        self.active_input = None 
+        
+        self.toolbar = SnippingToolBar(self)
+        self.toolbar.hide()
+        
+        self.toolbar.btn_cancel.clicked.connect(self.close_all)
+        self.toolbar.btn_ok.clicked.connect(self.finish_capture)
+        self.toolbar.btn_undo.clicked.connect(self.undo_drawing)
+        
+        self.toolbar.btn_rect.clicked.connect(lambda: self.set_draw_mode('rect'))
+        self.toolbar.btn_ellipse.clicked.connect(lambda: self.set_draw_mode('ellipse'))
+        self.toolbar.btn_arrow.clicked.connect(lambda: self.set_draw_mode('arrow'))
+        self.toolbar.btn_pen.clicked.connect(lambda: self.set_draw_mode('pen'))
+        self.toolbar.btn_text.clicked.connect(lambda: self.set_draw_mode('text'))
+        
+        for btn in self.toolbar.color_btns:
+            btn.clicked.connect(lambda checked, c=btn.color, b=btn: self.set_color(c, b))
+            
+        self.toolbar.size_combo.currentIndexChanged.connect(self.update_font_size_from_combo)
+
+    def set_color(self, color, btn_obj):
+        self.current_color = color
+        for b in self.toolbar.color_btns:
+            b.setChecked(False)
+        btn_obj.setChecked(True)
+        
+        if self.active_input:
+            self.active_input.color = color
+            self.active_input.update_style()
+
+    def update_font_size_from_combo(self):
+        try:
+            size = int(self.toolbar.size_combo.currentText())
+            self.current_font_size = size
+            if self.active_input:
+                self.active_input.font_size = size
+                self.active_input.update_style()
+        except:
+            pass
+
+    def set_draw_mode(self, mode):
+        if self.active_input:
+            self.commit_text_input()
+
+        buttons = {
+            'rect': self.toolbar.btn_rect,
+            'ellipse': self.toolbar.btn_ellipse,
+            'arrow': self.toolbar.btn_arrow,
+            'pen': self.toolbar.btn_pen,
+            'text': self.toolbar.btn_text
+        }
+        
+        if mode is not None and mode == self.draw_mode:
+            buttons[mode].setChecked(False)
+            mode = None
+        
+        for btn in buttons.values():
+            btn.setChecked(False)
+        
+        if mode is not None:
+            buttons[mode].setChecked(True)
+            self.toolbar.colors_widget.show()
+            
+            is_text = (mode == 'text')
+            self.toolbar.size_combo.setVisible(is_text)
+            # [修复点2] 现在可以通过 self.toolbar.line_sep 访问了
+            self.toolbar.line_sep.setVisible(is_text)
+            
+            if mode == 'text':
+                self.setCursor(Qt.CursorShape.IBeamCursor)
+            else:
+                self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.toolbar.colors_widget.hide()
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            
+        self.draw_mode = mode
+        self.toolbar.adjustSize()
+        
+        if self.has_selected:
+            rect = QRect(self.begin, self.end).normalized()
+            self.show_toolbar(rect)
+
+    def undo_drawing(self):
+        if self.drawings:
+            self.drawings.pop()
+            self.update()
+
+    def grab_full_screen(self):
+        try:
+            dpr = self.screen().devicePixelRatio()
+            geo = self.geometry()
+            real_x = int(geo.x() * dpr)
+            real_y = int(geo.y() * dpr)
+            real_w = int(geo.width() * dpr)
+            real_h = int(geo.height() * dpr)
+            with mss.mss() as sct:
+                monitor = {"top": real_y, "left": real_x, "width": real_w, "height": real_h, "mon": -1}
+                img = sct.grab(monitor)
+                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
+                qimg.setDevicePixelRatio(dpr)
+                return QPixmap.fromImage(qimg)
+        except:
+            return QPixmap()
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.fillRect(self.rect(), QColor(0, 0, 0, 100))
-        if self.is_snipping and self.begin != self.end:
-            local_begin = self.mapFromGlobal(self.begin)
-            local_end = self.mapFromGlobal(self.end)
-            rect = QRect(local_begin, local_end).normalized()
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
-            painter.fillRect(rect, Qt.GlobalColor.transparent)
-            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        if self.full_screenshot:
+            painter.drawPixmap(0, 0, self.full_screenshot)
+            
+        painter.setBrush(QColor(0, 0, 0, 100))
+        painter.setPen(Qt.PenStyle.NoPen)
+        if not self.has_selected and not self.is_selecting:
+            painter.drawRect(self.rect())
+        else:
+            painter.drawRect(self.rect())
+            rect = QRect(self.begin, self.end).normalized()
+            if rect.width() > 0 and rect.height() > 0:
+                painter.drawPixmap(rect, self.full_screenshot, rect)
+            
             pen = QPen(config.theme_color, config.border_width)
             painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
             
-            w, h = rect.width(), rect.height()
-            if w > 10:
+            for item in self.drawings:
+                painter.setPen(QPen(item['color'], 2)) 
+                self.draw_shape(painter, item)
+            
+            if self.current_drawing:
+                painter.setPen(QPen(self.current_color, 2))
+                self.draw_shape(painter, self.current_drawing)
+
+            if rect.width() > 0:
+                w, h = rect.width(), rect.height()
                 txt = f"{w} x {h}"
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor('#000000'))
@@ -241,39 +582,188 @@ class SnippingWindow(QWidget):
                 painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
                 painter.drawText(rect.x()+5, rect.y()-10, txt)
 
+    def draw_shape(self, painter, item):
+        if item['type'] == 'rect':
+            painter.drawRect(item['rect'])
+        elif item['type'] == 'ellipse':
+            painter.drawEllipse(item['rect'])
+        elif item['type'] == 'pen':
+            painter.drawPath(item['path'])
+        elif item['type'] == 'arrow':
+            self.draw_arrow(painter, item['start'], item['end'])
+        elif item['type'] == 'text':
+            size = item.get('size', 18)
+            font = QFont("Microsoft YaHei", size, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(QPen(item['color']))
+            painter.drawText(item['point'], item['text'])
+
+    def draw_arrow(self, painter, start, end):
+        line_pen = painter.pen()
+        start_f = QPointF(start)
+        end_f = QPointF(end)
+        
+        painter.drawLine(start_f, end_f)
+        
+        angle = math.atan2(end_f.y() - start_f.y(), end_f.x() - start_f.x())
+        arrow_size = 15
+        
+        p1 = end_f - QPointF(math.cos(angle + math.pi / 6) * arrow_size, math.sin(angle + math.pi / 6) * arrow_size)
+        p2 = end_f - QPointF(math.cos(angle - math.pi / 6) * arrow_size, math.sin(angle - math.pi / 6) * arrow_size)
+        
+        arrow_head = QPolygonF([end_f, p1, p2])
+        painter.setBrush(QBrush(line_pen.color()))
+        painter.drawPolygon(arrow_head)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+
     def mousePressEvent(self, event):
-        self.begin = event.globalPosition().toPoint()
+        if self.childAt(event.pos()) and (self.toolbar.isAncestorOf(self.childAt(event.pos())) or self.childAt(event.pos()) == self.toolbar): 
+            return
+        
+        if event.button() == Qt.MouseButton.RightButton:
+            if self.draw_mode:
+                self.set_draw_mode(None)
+            else:
+                self.close_all()
+            return
+
+        if self.has_selected and self.draw_mode:
+            if self.draw_mode == 'text':
+                if self.active_input:
+                    self.commit_text_input()
+                
+                self.active_input = OverlayInput(self, event.pos(), self.current_color, self.current_font_size)
+                self.active_input.show()
+                self.active_input.returnPressed.connect(self.commit_text_input)
+                return
+
+            self.is_selecting = False
+            start_p = event.pos()
+            
+            drawing_data = {
+                'type': self.draw_mode, 
+                'color': self.current_color, 
+                'start': start_p, 
+                'end': start_p, 
+                'rect': QRect()
+            }
+            
+            if self.draw_mode == 'pen':
+                path = QPainterPath(QPointF(start_p))
+                drawing_data['path'] = path
+                
+            self.current_drawing = drawing_data
+            self.update()
+            return
+
+        self.toolbar.hide()
+        self.toolbar.colors_widget.hide()
+        self.drawings.clear()
+        self.set_draw_mode(None)
+        self.begin = event.pos()
         self.end = self.begin
-        self.is_snipping = True
+        self.is_selecting = True
+        self.has_selected = False
+        
+        if self.active_input:
+            self.active_input.deleteLater()
+            self.active_input = None
+            
         self.update()
+
+    def commit_text_input(self):
+        if self.active_input:
+            text = self.active_input.text()
+            if text:
+                pos = self.active_input.pos() + QPoint(0, self.active_input.height() - 8)
+                self.drawings.append({
+                    'type': 'text',
+                    'color': self.active_input.color,
+                    'size': self.active_input.font_size,
+                    'point': pos,
+                    'text': text
+                })
+            self.active_input.deleteLater()
+            self.active_input = None
+            self.update()
 
     def mouseMoveEvent(self, event):
-        self.end = event.globalPosition().toPoint()
-        self.update()
+        if self.current_drawing:
+            if self.current_drawing['type'] in ['rect', 'ellipse']:
+                self.current_drawing['rect'] = QRect(self.current_drawing['start'], event.pos()).normalized()
+            elif self.current_drawing['type'] == 'arrow':
+                self.current_drawing['end'] = event.pos()
+            elif self.current_drawing['type'] == 'pen':
+                self.current_drawing['path'].lineTo(QPointF(event.pos()))
+            self.update()
+            return
+            
+        if self.is_selecting:
+            self.end = event.pos()
+            self.update()
 
     def mouseReleaseEvent(self, event):
-        self.is_snipping = False
-        rect = QRect(self.begin, self.end).normalized()
-        close_all_windows()
-        if rect.width() > 5:
-            self.capture(rect.x(), rect.y(), rect.width(), rect.height())
-            comm.show_toast.emit(rect.x() + rect.width(), rect.y())
+        if event.button() == Qt.MouseButton.RightButton: return
 
-    def capture(self, x, y, w, h):
-        try:
-            dpr = self.screen().devicePixelRatio()
-            real_x = int(x * dpr)
-            real_y = int(y * dpr)
-            real_w = int(w * dpr)
-            real_h = int(h * dpr)
-            with mss.mss() as sct:
-                monitor = {"top": real_y, "left": real_x, "width": real_w, "height": real_h, "mon": -1}
-                img = sct.grab(monitor)
-                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
-                qimg.setDevicePixelRatio(dpr)
-                QApplication.clipboard().setImage(qimg)
-        except Exception as e:
-            print(f"Error: {e}")
+        if self.current_drawing:
+            self.drawings.append(self.current_drawing)
+            self.current_drawing = None
+            self.update()
+            return
+
+        if self.is_selecting:
+            self.is_selecting = False
+            self.has_selected = True
+            self.end = event.pos()
+            rect = QRect(self.begin, self.end).normalized()
+            
+            if rect.width() < 10 or rect.height() < 10:
+                self.has_selected = False
+                self.update()
+                return
+
+            self.show_toolbar(rect)
+            self.update()
+
+    def show_toolbar(self, rect):
+        self.toolbar.adjustSize()
+        x = rect.x() + rect.width() - self.toolbar.width()
+        y = rect.y() + rect.height() + 8
+        
+        screen_geo = self.geometry()
+        if y + self.toolbar.height() > screen_geo.height():
+            y = rect.y() + rect.height() - self.toolbar.height() - 10
+        if x < 0: x = 0
+            
+        self.toolbar.move(x, y)
+        self.toolbar.show()
+
+    def finish_capture(self):
+        if self.active_input:
+            self.commit_text_input()
+            
+        rect = QRect(self.begin, self.end).normalized()
+        if rect.width() > 0:
+            canvas = QPixmap(self.full_screenshot.size())
+            canvas.setDevicePixelRatio(self.full_screenshot.devicePixelRatio())
+            
+            p = QPainter(canvas)
+            p.drawPixmap(0, 0, self.full_screenshot)
+            
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for item in self.drawings:
+                p.setPen(QPen(item['color'], 2))
+                self.draw_shape(p, item)
+            p.end()
+            
+            cropped = canvas.copy(rect)
+            QApplication.clipboard().setPixmap(cropped)
+            comm.show_toast.emit(rect.x() + rect.width(), rect.y())
+        
+        self.close_all()
+
+    def close_all(self):
+        close_all_windows()
 
 def close_all_windows():
     global active_windows
@@ -301,31 +791,18 @@ def open_github():
 def setup_tray(app):
     global tray_icon
     icon_path = resource_path(config.icon_filename)
-    
-    # [关键修改] 如果找到图片，强制把它画成圆的
     if os.path.exists(icon_path):
-        # 1. 加载原图
         src_img = QImage(icon_path)
         size = src_img.size()
-        
-        # 2. 创建一张空的透明图（作为画布）
         out_img = QImage(size, QImage.Format.Format_ARGB32)
         out_img.fill(Qt.GlobalColor.transparent)
-        
-        # 3. 开始绘画
         painter = QPainter(out_img)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing) # 开启抗锯齿，边缘更平滑
-        
-        # 4. 创建画刷（把原图当成颜料）
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         brush = QBrush(src_img)
         painter.setBrush(brush)
-        painter.setPen(Qt.PenStyle.NoPen) # 不要边框
-        
-        # 5. 画一个圆（因为颜料是原图，所以圆里面就是图片内容，四角被切掉了）
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(0, 0, size.width(), size.height())
         painter.end()
-        
-        # 6. 生成图标
         icon = QIcon(QPixmap.fromImage(out_img))
     else:
         icon = app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
@@ -361,5 +838,5 @@ if __name__ == '__main__':
     try: keyboard.add_hotkey(config.hotkey, comm.trigger_screenshot.emit)
     except: pass
     
-    print("GeekTool V40 (Round Icon) Started.")
+    print("GeekTool V47 (Critical Hotfix) Started.")
     sys.exit(app.exec())

@@ -1,24 +1,40 @@
 # Mouse4
 
-没什么花哨的，这就是一个只有两个功能的 Windows 小工具。
+一个简单、纯粹的 Windows 鼠标增强程序。它只有两个核心功能：**双击返回** 和 **截图**。
 
-## ✨ 功能介绍
+<p align="center">
+  <img src="https://img.shields.io/badge/version-V47.0-green.svg" alt="Version V47.0">
+  <img src="https://img.shields.io/badge/platform-Windows-blue.svg" alt="Platform Windows">
+  <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License MIT">
+</p>
 
-1. **空白处双击返回**
-   - 在文件夹空白处双击鼠标左键，自动返回上一级目录。
-   - *（可在托盘菜单调节双击灵敏度）*
+## ✨ 核心功能
 
-2. **截图 & 右键存图**
-   - **截图**：按下热键（默认 `Ctrl+1`）截图。
-   - **存图**：在文件夹空白处**右键**，点击“粘贴刚才的截图”，直接生成图片文件。无需打开画图软件。
+### 1. 鼠标增强
+* **双击空白返回**：在资源管理器（文件夹）的空白处双击鼠标左键，自动返回上一级文件夹。让文件浏览操作更顺手。
 
-## 📥 下载与安装
+### 2. 截图与标注 (V47 更新)
+按下快捷键（默认 `Ctrl + 1`）即可触发截图。
+* **屏幕定格**：截图时画面静止，方便捕捉动态内容。
+* **绘图标注**：提供简单的矩形、圆形、箭头、画笔工具。
+* **文字输入**：点击屏幕任意位置即可输入文字，支持字号调整。
+* **右键菜单**：截图后，可通过系统右键菜单直接将图片“粘贴”为文件。
 
-1. 前往项目的 [Releases 页面](https://github.com/JohnWish1590/Mouse4/releases) 下载最新的 `mouse4.exe`。
-2. 直接双击运行。
-3. **如果需要开机自启**：
-   - 按下 `Win + R` 键，输入 `shell:startup` 回车。
-   - 将 `mouse4.exe` 的快捷方式拖入打开的文件夹即可。
+---
+
+## 📥 下载与使用
+
+### 方式一：直接运行 (推荐)
+1.  前往 **[Releases 页面](../../releases)** 下载最新的 `Mouse4.exe`。
+2.  直接双击运行即可（建议放入一个固定文件夹，如 `D:\Program Files\Mouse4`）。
+
+### 方式二：源码运行
+```bash
+git clone [https://github.com/你的用户名/Mouse4.git](https://github.com/你的用户名/Mouse4.git)
+cd Mouse4
+pip install -r requirements.txt
+python main.pyw
+
 
 ## 🛠️ 设置说明
 
