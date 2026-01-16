@@ -3,7 +3,7 @@
 一个简单、纯粹的 Windows 鼠标增强程序。它只有两个核心功能：**双击返回** 和 **截图**。
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-V47.0-green.svg" alt="Version V47.0">
+  <img src="https://img.shields.io/badge/version-V54.0-green.svg" alt="Version V54.0">
   <img src="https://img.shields.io/badge/platform-Windows-blue.svg" alt="Platform Windows">
   <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License MIT">
 </p>
@@ -13,7 +13,7 @@
 ### 1. 鼠标增强
 * **双击空白返回**：在资源管理器（文件夹）的空白处双击鼠标左键，自动返回上一级文件夹。让文件浏览操作更顺手。
 
-### 2. 截图与标注 (V47 更新)
+### 2. 截图与标注 (V54 更新)
 按下快捷键（默认 `Ctrl + 1`）即可触发截图。
 * **屏幕定格**：截图时画面静止，方便捕捉动态内容。
 * **绘图标注**：提供简单的矩形、圆形、箭头、画笔工具。

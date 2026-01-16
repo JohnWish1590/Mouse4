@@ -55,7 +55,6 @@ if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
 # ================= 2. 主程序设置 =================
-# [V53] 保持开启 DPI 感知，保证界面清晰
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except:
@@ -83,7 +82,7 @@ class GlobalConfig:
     border_width = 2
     icon_filename = 'logo.ico'
     github_url = "https://github.com/JohnWish1590/Mouse4"
-    context_menu_text = "粘贴刚才的截图 (Mouse4)"
+    context_menu_text = "粘贴刚才的截图 (GeekPaste)"
     reg_key_name = "GeekPaste"
 
 config = GlobalConfig()
@@ -352,11 +351,13 @@ class SnippingToolBar(QWidget):
         bottom_layout.setContentsMargins(10, 6, 10, 6)
         bottom_layout.setSpacing(10)
         
+        # 字号下拉框
         self.size_combo = QComboBox()
         self.size_combo.addItems([str(s) for s in [12, 14, 16, 18, 24, 36, 48, 64, 72]])
         self.size_combo.setCurrentText("18")
         self.size_combo.setFixedWidth(68)
         
+        # 上下箭头 SVG
         arrow_svg = """url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 15l5 5 5-5'/%3E%3Cpath d='M7 9l5-5 5 5'/%3E%3C/svg%3E")"""
         
         self.size_combo.setStyleSheet(f"""
@@ -390,6 +391,8 @@ class SnippingToolBar(QWidget):
         """)
         bottom_layout.addWidget(self.size_combo)
         
+        # 分割线 (QFrame)
+        # [修复点1] 将 line_sep 绑定到 self.line_sep，使其成为类属性
         self.line_sep = QFrame()
         self.line_sep.setFrameShape(QFrame.Shape.VLine)
         self.line_sep.setFrameShadow(QFrame.Shadow.Plain)
@@ -419,15 +422,10 @@ class SnippingWindow(QWidget):
         super().__init__()
         self.screen_info = screen_info
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
-        
-        self.setScreen(screen_info)
         self.setGeometry(screen_info.geometry())
         self.showFullScreen()
         
-        # [V53] 初始化缩放因子
-        self.scale_factor = 1.0 
-        self.full_screenshot = None
-        self.grab_current_screen()
+        self.full_screenshot = self.grab_full_screen()
         
         self.begin = QPoint()
         self.end = QPoint()
@@ -458,45 +456,6 @@ class SnippingWindow(QWidget):
             btn.clicked.connect(lambda checked, c=btn.color, b=btn: self.set_color(c, b))
             
         self.toolbar.size_combo.currentIndexChanged.connect(self.update_font_size_from_combo)
-
-    def grab_current_screen(self):
-        try:
-            # 1. 获取 Qt 认为的窗口大小 (逻辑像素)
-            # 例如 4K 200% 缩放下，这里是 1920x1080
-            win_geo = self.geometry()
-            
-            # 2. 使用 mss 抓取物理像素
-            # mss 抓到的是真实的 3840x2160
-            with mss.mss() as sct:
-                # 尝试智能匹配当前屏幕
-                # 我们取窗口中心点来匹配 monitor
-                cx = win_geo.x() + win_geo.width() // 2
-                cy = win_geo.y() + win_geo.height() // 2
-                
-                target_mon = None
-                for mon in sct.monitors[1:]:
-                    if (mon["left"] <= cx < mon["left"] + mon["width"] and 
-                        mon["top"] <= cy < mon["top"] + mon["height"]):
-                        target_mon = mon
-                        break
-                
-                if not target_mon:
-                    # 兜底：直接按 geometry 抓，可能包含偏移
-                    target_mon = {"top": win_geo.y(), "left": win_geo.x(), "width": win_geo.width(), "height": win_geo.height(), "mon": -1}
-                
-                img = sct.grab(target_mon)
-                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
-                
-                # [V53 核心修改]
-                # 不再设置 setDevicePixelRatio！保持原图是“巨大”的物理像素。
-                # 计算缩放比例：物理宽度 / 逻辑宽度
-                # 例如 3840 / 1920 = 2.0
-                self.scale_factor = img.width / max(1, win_geo.width())
-                
-                self.full_screenshot = QPixmap.fromImage(qimg)
-        except:
-            self.full_screenshot = QPixmap()
-            self.scale_factor = 1.0
 
     def set_color(self, color, btn_obj):
         self.current_color = color
@@ -543,6 +502,7 @@ class SnippingWindow(QWidget):
             
             is_text = (mode == 'text')
             self.toolbar.size_combo.setVisible(is_text)
+            # [修复点2] 现在可以通过 self.toolbar.line_sep 访问了
             self.toolbar.line_sep.setVisible(is_text)
             
             if mode == 'text':
@@ -565,52 +525,45 @@ class SnippingWindow(QWidget):
             self.drawings.pop()
             self.update()
 
+    def grab_full_screen(self):
+        try:
+            dpr = self.screen().devicePixelRatio()
+            geo = self.geometry()
+            real_x = int(geo.x() * dpr)
+            real_y = int(geo.y() * dpr)
+            real_w = int(geo.width() * dpr)
+            real_h = int(geo.height() * dpr)
+            with mss.mss() as sct:
+                monitor = {"top": real_y, "left": real_x, "width": real_w, "height": real_h, "mon": -1}
+                img = sct.grab(monitor)
+                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
+                qimg.setDevicePixelRatio(dpr)
+                return QPixmap.fromImage(qimg)
+        except:
+            return QPixmap()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # [V53] 手动计算绘制区域
-        # 目标(屏幕): 逻辑坐标 rect
-        # 源(图片): 物理坐标 source_rect = rect * scale_factor
-        
-        window_rect = self.rect()
-        
         if self.full_screenshot:
-            # 绘制全屏背景
-            painter.drawPixmap(window_rect, self.full_screenshot, self.full_screenshot.rect())
+            painter.drawPixmap(0, 0, self.full_screenshot)
             
         painter.setBrush(QColor(0, 0, 0, 100))
         painter.setPen(Qt.PenStyle.NoPen)
-        
         if not self.has_selected and not self.is_selecting:
-            painter.drawRect(window_rect)
+            painter.drawRect(self.rect())
         else:
-            # 绘制遮罩（除去选中区）
-            # 这里简单起见，画整个黑底，然后清除选中区（或者重画选中区背景）
-            # 为了避免复杂的 Region 操作，我们直接重画选中区背景
-            
-            painter.drawRect(window_rect) # 全黑
-            
+            painter.drawRect(self.rect())
             rect = QRect(self.begin, self.end).normalized()
-            
             if rect.width() > 0 and rect.height() > 0:
-                # 计算对应的物理像素区域
-                sx = int(rect.x() * self.scale_factor)
-                sy = int(rect.y() * self.scale_factor)
-                sw = int(rect.width() * self.scale_factor)
-                sh = int(rect.height() * self.scale_factor)
-                source_rect = QRect(sx, sy, sw, sh)
-                
-                # 将物理区域画回逻辑区域
-                painter.drawPixmap(rect, self.full_screenshot, source_rect)
+                painter.drawPixmap(rect, self.full_screenshot, rect)
             
-            # 画框
             pen = QPen(config.theme_color, config.border_width)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(rect)
             
-            # 画图元
             for item in self.drawings:
                 painter.setPen(QPen(item['color'], 2)) 
                 self.draw_shape(painter, item)
@@ -619,16 +572,9 @@ class SnippingWindow(QWidget):
                 painter.setPen(QPen(self.current_color, 2))
                 self.draw_shape(painter, self.current_drawing)
 
-            # 画尺寸提示
             if rect.width() > 0:
                 w, h = rect.width(), rect.height()
-                # 这里的 w, h 是逻辑尺寸，如果想显示物理像素，可以乘 scale_factor
-                # 但一般显示逻辑像素更符合感知，或者显示物理像素显得更专业
-                # 这里显示物理像素：
-                phy_w = int(w * self.scale_factor)
-                phy_h = int(h * self.scale_factor)
-                txt = f"{phy_w} x {phy_h}"
-                
+                txt = f"{w} x {h}"
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor('#000000'))
                 painter.drawRect(rect.x(), rect.y()-25, len(txt)*9, 20)
@@ -798,28 +744,11 @@ class SnippingWindow(QWidget):
             
         rect = QRect(self.begin, self.end).normalized()
         if rect.width() > 0:
-            # 最终裁剪：使用物理坐标切图
-            sx = int(rect.x() * self.scale_factor)
-            sy = int(rect.y() * self.scale_factor)
-            sw = int(rect.width() * self.scale_factor)
-            sh = int(rect.height() * self.scale_factor)
-            source_rect = QRect(sx, sy, sw, sh)
-            
-            # 从原始物理大图中切出高分辨率图
-            cropped_raw = self.full_screenshot.copy(source_rect)
-            
-            # 绘制标注到切片上
-            # 注意：标注记录的是逻辑坐标，需要映射到物理坐标
-            canvas = QPixmap(cropped_raw.size())
-            canvas.fill(Qt.GlobalColor.transparent) # 或用 crop 做底
+            canvas = QPixmap(self.full_screenshot.size())
+            canvas.setDevicePixelRatio(self.full_screenshot.devicePixelRatio())
             
             p = QPainter(canvas)
-            p.drawPixmap(0, 0, cropped_raw)
-            
-            # 设置缩放，让 Painter 以为自己在逻辑坐标系下画图，但实际画在物理大图上
-            p.scale(self.scale_factor, self.scale_factor)
-            # 坐标系原点平移到切片左上角
-            p.translate(-rect.x(), -rect.y())
+            p.drawPixmap(0, 0, self.full_screenshot)
             
             p.setBrush(Qt.BrushStyle.NoBrush)
             for item in self.drawings:
@@ -827,7 +756,8 @@ class SnippingWindow(QWidget):
                 self.draw_shape(p, item)
             p.end()
             
-            QApplication.clipboard().setPixmap(canvas)
+            cropped = canvas.copy(rect)
+            QApplication.clipboard().setPixmap(cropped)
             comm.show_toast.emit(rect.x() + rect.width(), rect.y())
         
         self.close_all()
@@ -847,13 +777,8 @@ tray_icon = None
 def do_show_windows():
     global active_windows
     if active_windows: close_all_windows(); return
-    
-    # [V54] 恢复多屏支持：遍历所有屏幕，给每个屏幕都创建一个独立的截图窗口
     for screen in QApplication.screens():
-        win = SnippingWindow(screen)
-        win.show()
-        active_windows.append(win)
-
+        active_windows.append(SnippingWindow(screen))
 
 def do_show_toast(x, y):
     global toast
@@ -903,10 +828,6 @@ if __name__ == '__main__':
     t = threading.Thread(target=start_mouse_thread, daemon=True)
     t.start()
     
-    # 保持 Rounding Policy
-    if hasattr(Qt.HighDpiScaleFactorRoundingPolicy, 'PassThrough'):
-        QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-        
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     setup_tray(app)
@@ -917,5 +838,5 @@ if __name__ == '__main__':
     try: keyboard.add_hotkey(config.hotkey, comm.trigger_screenshot.emit)
     except: pass
     
-    print("Mouse4 V53 (Manual Scale Fix) Started.")
+    print("GeekTool V47 (Critical Hotfix) Started.")
     sys.exit(app.exec())
