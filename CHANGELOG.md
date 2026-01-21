@@ -2,6 +2,11 @@
 
 All notable changes to the **Mouse4** project will be documented in this file.
 
+## [V55.0] - 2026-01-21 (Final Stable)
+### Fixed
+- **误触修复**: 彻底解决了在快速输入数字（如 "712"）或切换窗口时，因系统 Ctrl 键状态残留导致误触发截图的 Bug。
+- **底层优化**: 引入 Win32 API `GetAsyncKeyState` 进行物理按键检测，替代了单纯的逻辑判断，热键触发更精准。
+
 ## [V54.0] - 2026-01-16 (Multi-Monitor Final)
 ### Changed
 - **多屏恢复**: 恢复全屏蒙版支持。现在按下快捷键时，所有连接的显示器都会同时变暗，支持在任意屏幕上截图。
