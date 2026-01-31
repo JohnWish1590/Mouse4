@@ -55,7 +55,7 @@ if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
 # ================= 2. 主程序设置 =================
-# [V55] 保持开启 DPI 感知
+# [V58] 保持 V54 的设置，开启 DPI 感知
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except:
@@ -70,7 +70,7 @@ from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject,
                           QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
                          QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
-import keyboard
+import keyboard # [V58] 回归使用 keyboard 库，这最稳定
 import mss
 import winreg
 
@@ -809,7 +809,6 @@ def do_show_windows():
     global active_windows
     if active_windows: close_all_windows(); return
     
-    # [V54 恢复] 全屏多屏支持
     for screen in QApplication.screens():
         win = SnippingWindow(screen)
         win.show()
@@ -822,6 +821,18 @@ def do_show_toast(x, y):
 
 def open_github():
     webbrowser.open(config.github_url)
+
+# [V58] 新增：手动重置热键逻辑
+def reload_hotkey():
+    try:
+        keyboard.remove_hotkey(config.hotkey)
+    except:
+        pass
+    try:
+        keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
+        comm.show_toast.emit(QCursor.pos().x(), QCursor.pos().y()) # 复活成功提示
+    except:
+        pass
 
 def setup_tray(app):
     global tray_icon
@@ -846,6 +857,8 @@ def setup_tray(app):
     menu = QMenu()
     
     menu.addAction("立即截图 (Ctrl+1)", comm.trigger_screenshot.emit)
+    # [V58] 新增：手动重置热键菜单
+    menu.addAction("重置快捷键 (如失效请点此)", reload_hotkey) 
     menu.addSeparator()
     
     rmenu = menu.addMenu("右键保存功能 (管理)")
@@ -859,10 +872,10 @@ def setup_tray(app):
     tray_icon.setContextMenu(menu)
     tray_icon.show()
 
-# [V55] 带物理检测的热键处理函数
+# [V58] 混合修复方案：keyboard 库 + GetAsyncKeyState 物理检测
 def check_hotkey_and_trigger():
-    # 检测 Ctrl 键的物理状态 (VK_CONTROL = 0x11)
-    # 0x8000 位表示按键当前是否按下
+    # 只有当 Ctrl 键 (0x11) 的最高位 (0x8000) 为 1 时，才认为是物理按下
+    # 这能完美过滤掉 keyboard 库的“幽灵触发”
     if ctypes.windll.user32.GetAsyncKeyState(0x11) & 0x8000:
         comm.trigger_screenshot.emit()
 
@@ -880,9 +893,10 @@ if __name__ == '__main__':
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(do_show_toast)
     
-    # [V55] 使用自定义的检测函数代替直接触发
+    # [V58] 恢复使用 keyboard.add_hotkey (最稳的方案)
+    # 但回调函数改为了 check_hotkey_and_trigger (防止 712 误触)
     try: keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
     except: pass
     
-    print("Mouse4 V55 (Ghost Ctrl Fix) Started.")
+    print("Mouse4 V58 (Final Hybrid Fix) Started.")
     sys.exit(app.exec())
