@@ -1,11 +1,13 @@
 import sys
 import os
 import ctypes
+import ctypes.wintypes # 需要用到 wintypes 解析系统消息
 import datetime
 import threading
 import time
 import webbrowser
 import math
+import subprocess
 
 # ================= 资源路径定位函数 =================
 def resource_path(relative_path):
@@ -55,7 +57,6 @@ if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
 # ================= 2. 主程序设置 =================
-# [V58] 保持 V54 的设置，开启 DPI 感知
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except:
@@ -70,7 +71,7 @@ from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject,
                           QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
                          QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
-import keyboard # [V58] 回归使用 keyboard 库，这最稳定
+import keyboard 
 import mss
 import winreg
 
@@ -183,6 +184,30 @@ class SignalComm(QObject):
 
 comm = SignalComm()
 active_windows = []
+
+# [V60] 电源消息监听器：专门负责监听“睡眠/唤醒”
+class PowerMonitor(QWidget):
+    def __init__(self):
+        super().__init__()
+        # 仅仅是一个隐形窗口，用于接收系统消息
+        self.setWindowFlags(Qt.WindowType.Tool)
+        # 确保创建原生窗口句柄
+        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
+
+    def nativeEvent(self, eventType, message):
+        try:
+            if eventType == b'windows_generic_MSG' or eventType == 'windows_generic_MSG':
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+                # WM_POWERBROADCAST = 536 (0x218)
+                if msg.message == 536:
+                    # PBT_APMRESUMEAUTOMATIC = 18 (0x12) - 系统从睡眠/休眠中恢复
+                    if msg.wParam == 18:
+                        print("System Resumed! Restarting program...")
+                        restart_program()
+                        return True, 0
+        except Exception:
+            pass
+        return super().nativeEvent(eventType, message)
 
 class SuccessToast(QWidget):
     def __init__(self, text="Saved!", parent=None):
@@ -822,16 +847,16 @@ def do_show_toast(x, y):
 def open_github():
     webbrowser.open(config.github_url)
 
-# [V58] 新增：手动重置热键逻辑
-def reload_hotkey():
+# [V60] 重启逻辑
+def restart_program():
     try:
-        keyboard.remove_hotkey(config.hotkey)
-    except:
-        pass
-    try:
-        keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
-        comm.show_toast.emit(QCursor.pos().x(), QCursor.pos().y()) # 复活成功提示
-    except:
+        if getattr(sys, 'frozen', False):
+            subprocess.Popen([sys.executable] + sys.argv[1:])
+        else:
+            subprocess.Popen([sys.executable, sys.argv[0]] + sys.argv[1:])
+        QApplication.quit()
+        sys.exit()
+    except Exception:
         pass
 
 def setup_tray(app):
@@ -857,8 +882,7 @@ def setup_tray(app):
     menu = QMenu()
     
     menu.addAction("立即截图 (Ctrl+1)", comm.trigger_screenshot.emit)
-    # [V58] 新增：手动重置热键菜单
-    menu.addAction("重置快捷键 (如失效请点此)", reload_hotkey) 
+    menu.addAction("重启程序 (修复失效)", restart_program)
     menu.addSeparator()
     
     rmenu = menu.addMenu("右键保存功能 (管理)")
@@ -872,10 +896,7 @@ def setup_tray(app):
     tray_icon.setContextMenu(menu)
     tray_icon.show()
 
-# [V58] 混合修复方案：keyboard 库 + GetAsyncKeyState 物理检测
 def check_hotkey_and_trigger():
-    # 只有当 Ctrl 键 (0x11) 的最高位 (0x8000) 为 1 时，才认为是物理按下
-    # 这能完美过滤掉 keyboard 库的“幽灵触发”
     if ctypes.windll.user32.GetAsyncKeyState(0x11) & 0x8000:
         comm.trigger_screenshot.emit()
 
@@ -893,10 +914,11 @@ if __name__ == '__main__':
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(do_show_toast)
     
-    # [V58] 恢复使用 keyboard.add_hotkey (最稳的方案)
-    # 但回调函数改为了 check_hotkey_and_trigger (防止 712 误触)
+    # [V60] 初始化电源监听器
+    power_monitor = PowerMonitor()
+    
     try: keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
     except: pass
     
-    print("Mouse4 V58 (Final Hybrid Fix) Started.")
+    print("Mouse4 V60 (Auto-Wake) Started.")
     sys.exit(app.exec())
