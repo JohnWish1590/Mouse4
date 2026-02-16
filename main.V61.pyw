@@ -1,7 +1,3 @@
-"""
-Mouse4 V65 - 修复剪贴板为空问题
-"""
-
 import sys
 import os
 import ctypes
@@ -11,131 +7,14 @@ import time
 import webbrowser
 import math
 import subprocess
-import json
-import atexit
-from pathlib import Path
-from io import BytesIO
 
-# ================= 0. 配置持久化系统 =================
-
-class ConfigManager:
-    def __init__(self):
-        self.config_dir = Path(os.environ.get('APPDATA', os.path.expanduser('~'))) / 'Mouse4'
-        self.config_file = self.config_dir / 'config.json'
-        self._cache = {}
-        self._lock = threading.Lock()
-        self._dirty = False
-        self._timer = None
-        
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        self._load()
-        atexit.register(self._save_sync)
-    
-    def _load(self):
-        try:
-            if self.config_file.exists():
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    self._cache = json.load(f)
-                print(f"[Config] Loaded from {self.config_file}")
-        except Exception as e:
-            print(f"[Config] Load failed: {e}")
-            self._cache = {}
-    
-    def _save_sync(self):
-        with self._lock:
-            if self._dirty:
-                try:
-                    with open(self.config_file, 'w', encoding='utf-8') as f:
-                        json.dump(self._cache, f, ensure_ascii=False, indent=2)
-                    print(f"[Config] Saved to {self.config_file}")
-                except Exception as e:
-                    print(f"[Config] Save failed: {e}")
-    
-    def _schedule_save(self):
-        if self._timer:
-            self._timer.cancel()
-        self._timer = threading.Timer(1.0, self._save_sync)
-        self._timer.daemon = True
-        self._timer.start()
-    
-    def get(self, key: str, default=None):
-        with self._lock:
-            return self._cache.get(key, default)
-    
-    def set(self, key: str, value):
-        with self._lock:
-            old_value = self._cache.get(key)
-            if old_value != value:
-                self._cache[key] = value
-                self._dirty = True
-                self._schedule_save()
-    
-    def get_color(self, key: str, default: str = '#FF0000') -> str:
-        return self.get(key, default)
-    
-    def set_color(self, key: str, color):
-        if hasattr(color, 'name'):
-            self.set(key, color.name())
-        else:
-            self.set(key, str(color))
-    
-    def get_int(self, key: str, default: int = 0) -> int:
-        try:
-            return int(self.get(key, default))
-        except (ValueError, TypeError):
-            return default
-
-config_mgr = ConfigManager()
-
-# ================= 1. 全局配置 =================
-
-class GlobalConfig:
-    hotkey = 'ctrl+1'
-    double_click_speed = 0.3
-    theme_color_hex = '#00FF00'
-    default_draw_color_hex = '#FF0000'
-    border_width = 2
-    icon_filename = 'logo.ico'
-    github_url = "https://github.com/JohnWish1590/Mouse4"
-    context_menu_text = "粘贴刚才的截图 (Mouse4)"
-    reg_key_name = "GeekPaste"
-    
-    KEY_LAST_COLOR = 'last_draw_color'
-    KEY_LAST_FONT_SIZE = 'last_font_size'
-    
-    @property
-    def theme_color(self):
-        from PyQt6.QtGui import QColor
-        return QColor(self.theme_color_hex)
-    
-    @property
-    def default_draw_color(self):
-        from PyQt6.QtGui import QColor
-        return QColor(self.default_draw_color_hex)
-    
-    def get_last_color(self):
-        from PyQt6.QtGui import QColor
-        color_hex = config_mgr.get_color(self.KEY_LAST_COLOR, self.default_draw_color_hex)
-        return QColor(color_hex)
-    
-    def save_last_color(self, color):
-        config_mgr.set_color(self.KEY_LAST_COLOR, color)
-    
-    def get_last_font_size(self) -> int:
-        return config_mgr.get_int(self.KEY_LAST_FONT_SIZE, 18)
-    
-    def save_last_font_size(self, size: int):
-        config_mgr.set(self.KEY_LAST_FONT_SIZE, size)
-
-config = GlobalConfig()
-
-# ================= 2. 基础函数 =================
-
+# ================= 资源路径定位函数 =================
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
+# ================= 1. 右键粘贴保存模式 =================
 def run_paste_mode_safe(args):
     try:
         from PIL import ImageGrab
@@ -170,38 +49,46 @@ def run_paste_mode_safe(args):
         sys.exit(0)
             
     except Exception as e:
-        ctypes.windll.user32.MessageBoxW(0, f"Error: {str(e)}", "错误", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, f"Error: {str(e)}", "Error", 0x10)
         sys.exit(1)
 
 if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
-# V65: DPI 感知设置
+# ================= 2. 主程序设置 =================
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except:
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except:
-            pass
+    try: ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except: pass
 
+# ================= 3. 导入 GUI =================
 from PyQt6.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu, 
                              QInputDialog, QLabel, QVBoxLayout, QHBoxLayout, 
                              QMessageBox, QStyle, QPushButton, QFrame, QLineEdit, QComboBox)
 from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject, 
-                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF, QThread, QBuffer)
+                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
-                         QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF, QClipboard)
+                         QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
 import keyboard 
 import mss
 import winreg
-from PIL import Image
 
-# ================= 3. 鼠标监听 =================
+# ================= 4. 全局配置 =================
+class GlobalConfig:
+    hotkey = 'ctrl+1'              
+    double_click_speed = 0.3       
+    theme_color = QColor('#00FF00') 
+    default_draw_color = QColor('#FF0000') 
+    border_width = 2
+    icon_filename = 'logo.ico'
+    github_url = "https://github.com/JohnWish1590/Mouse4"
+    context_menu_text = "粘贴刚才的截图 (Mouse4)"
+    reg_key_name = "GeekPaste"
 
+config = GlobalConfig()
+
+# ================= 5. 智能窗口识别 & 鼠标监听 =================
 def start_mouse_thread():
     from pynput import mouse as pynput_mouse
     import uiautomation as auto
@@ -247,8 +134,7 @@ def start_mouse_thread():
     with pynput_mouse.Listener(on_click=handler.on_click) as listener:
         listener.join()
 
-# ================= 4. 注册表管理器 =================
-
+# ================= 6. 注册表管理器 =================
 class RegistryManager:
     def __init__(self):
         self.base_key = winreg.HKEY_CURRENT_USER
@@ -290,8 +176,7 @@ class RegistryManager:
             return True, "已移除右键菜单。"
         except: return True, "未安装。"
 
-# ================= 5. 截图功能核心 =================
-
+# ================= 7. 截图功能 & 绘画核心 =================
 class SignalComm(QObject):
     trigger_screenshot = pyqtSignal()
     show_toast = pyqtSignal(int, int)
@@ -551,20 +436,12 @@ class SnippingWindow(QWidget):
         self.draw_mode = None 
         self.drawings = []
         self.current_drawing = None 
-        
-        self.current_color = config.get_last_color()
-        self.current_font_size = config.get_last_font_size()
+        self.current_color = config.default_draw_color
+        self.current_font_size = 18 
         self.active_input = None 
-        
-        self._last_click_time = 0
-        self._click_count = 0
-        self._double_click_threshold = 400
         
         self.toolbar = SnippingToolBar(self)
         self.toolbar.hide()
-        
-        self._restore_last_color()
-        self.toolbar.size_combo.setCurrentText(str(self.current_font_size))
         
         self.toolbar.btn_cancel.clicked.connect(self.close_all)
         self.toolbar.btn_ok.clicked.connect(self.finish_capture)
@@ -581,20 +458,9 @@ class SnippingWindow(QWidget):
             
         self.toolbar.size_combo.currentIndexChanged.connect(self.update_font_size_from_combo)
 
-    def _restore_last_color(self):
-        last_color = config.get_last_color()
-        for btn in self.toolbar.color_btns:
-            if btn.color.name().lower() == last_color.name().lower():
-                btn.setChecked(True)
-                self.toolbar.selected_color = btn.color
-            else:
-                btn.setChecked(False)
-
     def grab_current_screen(self):
-        """V65: 修复截图清晰度 - 使用BGRA格式并正确转换"""
         try:
             win_geo = self.geometry()
-            
             with mss.mss() as sct:
                 cx = win_geo.x() + win_geo.width() // 2
                 cy = win_geo.y() + win_geo.height() // 2
@@ -607,38 +473,14 @@ class SnippingWindow(QWidget):
                         break
                 
                 if not target_mon:
-                    target_mon = {
-                        "top": win_geo.y(), 
-                        "left": win_geo.x(), 
-                        "width": win_geo.width(), 
-                        "height": win_geo.height()
-                    }
+                    target_mon = {"top": win_geo.y(), "left": win_geo.x(), "width": win_geo.width(), "height": win_geo.height(), "mon": -1}
                 
-                # 抓取屏幕
                 img = sct.grab(target_mon)
+                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_RGB32).copy()
                 
-                # V65关键修复：mss返回的是BGRA格式，需要正确转换为QImage
-                # img.bgra 是原始字节数据，格式是BGRA
-                width, height = img.width, img.height
-                self.scale_factor = width / max(1, win_geo.width())
-                
-                # 使用Format_ARGB32_Premultiplied获得最佳性能和兼容性
-                # 注意：mss的bgra实际上是BGRA，但QImage的ARGB32是RGBA
-                # 我们需要交换R和B通道
-                qimg = QImage(img.bgra, width, height, QImage.Format.Format_ARGB32)
-                
-                # 在Windows上，可能需要手动交换红蓝通道
-                # 这里我们依赖Qt的自动处理，如果颜色不对再调整
-                
-                self.full_screenshot = QPixmap.fromImage(qimg.copy())
-                
-                print(f"[V65] Screen captured: {width}x{height}, scale: {self.scale_factor:.2f}")
-                print(f"[V65] Screenshot is null: {self.full_screenshot.isNull()}")
-                
-        except Exception as e:
-            print(f"[V65] Screen grab failed: {e}")
-            import traceback
-            traceback.print_exc()
+                self.scale_factor = img.width / max(1, win_geo.width())
+                self.full_screenshot = QPixmap.fromImage(qimg)
+        except:
             self.full_screenshot = QPixmap()
             self.scale_factor = 1.0
 
@@ -648,8 +490,6 @@ class SnippingWindow(QWidget):
             b.setChecked(False)
         btn_obj.setChecked(True)
         
-        config.save_last_color(color)
-        
         if self.active_input:
             self.active_input.color = color
             self.active_input.update_style()
@@ -658,7 +498,6 @@ class SnippingWindow(QWidget):
         try:
             size = int(self.toolbar.size_combo.currentText())
             self.current_font_size = size
-            config.save_last_font_size(size)
             if self.active_input:
                 self.active_input.font_size = size
                 self.active_input.update_style()
@@ -718,8 +557,7 @@ class SnippingWindow(QWidget):
         
         window_rect = self.rect()
         
-        if self.full_screenshot and not self.full_screenshot.isNull():
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        if self.full_screenshot:
             painter.drawPixmap(window_rect, self.full_screenshot, self.full_screenshot.rect())
             
         painter.setBrush(QColor(0, 0, 0, 100))
@@ -728,7 +566,7 @@ class SnippingWindow(QWidget):
         if not self.has_selected and not self.is_selecting:
             painter.drawRect(window_rect)
         else:
-            painter.drawRect(window_rect)
+            painter.drawRect(window_rect) # 全黑
             
             rect = QRect(self.begin, self.end).normalized()
             
@@ -738,10 +576,7 @@ class SnippingWindow(QWidget):
                 sw = int(rect.width() * self.scale_factor)
                 sh = int(rect.height() * self.scale_factor)
                 source_rect = QRect(sx, sy, sw, sh)
-                
-                # 确保源矩形在有效范围内
-                if self.full_screenshot and not self.full_screenshot.isNull():
-                    painter.drawPixmap(rect, self.full_screenshot, source_rect)
+                painter.drawPixmap(rect, self.full_screenshot, source_rect)
             
             pen = QPen(config.theme_color, config.border_width)
             painter.setPen(pen)
@@ -804,17 +639,6 @@ class SnippingWindow(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.has_selected:
-            current_time = int(time.time() * 1000)
-            
-            if hasattr(self, '_last_click_time') and (current_time - self._last_click_time) < self._double_click_threshold:
-                print(f"[Debug] Double click detected! Saving...")
-                self.finish_capture()
-                return
-            else:
-                self._last_click_time = current_time
-                self._click_count = 1
-        
         if self.childAt(event.pos()) and (self.toolbar.isAncestorOf(self.childAt(event.pos())) or self.childAt(event.pos()) == self.toolbar): 
             return
         
@@ -854,17 +678,11 @@ class SnippingWindow(QWidget):
             self.update()
             return
 
-        click_pos = event.pos()
-        if self.has_selected:
-            rect = QRect(self.begin, self.end).normalized()
-            if rect.contains(click_pos):
-                return
-        
         self.toolbar.hide()
         self.toolbar.colors_widget.hide()
         self.drawings.clear()
         self.set_draw_mode(None)
-        self.begin = click_pos
+        self.begin = event.pos()
         self.end = self.begin
         self.is_selecting = True
         self.has_selected = False
@@ -907,8 +725,7 @@ class SnippingWindow(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton: 
-            return
+        if event.button() == Qt.MouseButton.RightButton: return
 
         if self.current_drawing:
             self.drawings.append(self.current_drawing)
@@ -944,39 +761,23 @@ class SnippingWindow(QWidget):
         self.toolbar.show()
 
     def finish_capture(self):
-        """V65: 修复剪贴板为空 - 在主线程同步执行"""
         if self.active_input:
             self.commit_text_input()
             
         rect = QRect(self.begin, self.end).normalized()
-        if rect.width() <= 0:
-            self.close_all()
-            return
-        
-        # V65关键修复：必须在关闭窗口前完成所有操作
-        # 因为关闭窗口会销毁QPixmap数据
-        try:
-            # 1. 计算物理坐标
+        if rect.width() > 0:
             sx = int(rect.x() * self.scale_factor)
             sy = int(rect.y() * self.scale_factor)
             sw = int(rect.width() * self.scale_factor)
             sh = int(rect.height() * self.scale_factor)
-            
-            print(f"[V65] Crop rect: ({sx}, {sy}, {sw}, {sh})")
-            print(f"[V65] Full screenshot size: {self.full_screenshot.width()}x{self.full_screenshot.height()}")
-            
-            # 2. 从高清截图中裁剪
             source_rect = QRect(sx, sy, sw, sh)
+            
             cropped_raw = self.full_screenshot.copy(source_rect)
             
-            print(f"[V65] Cropped size: {cropped_raw.width()}x{cropped_raw.height()}")
-            
-            # 3. 创建画布并绘制标注
             canvas = QPixmap(cropped_raw.size())
             canvas.fill(Qt.GlobalColor.transparent)
             
             p = QPainter(canvas)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
             p.drawPixmap(0, 0, cropped_raw)
             p.scale(self.scale_factor, self.scale_factor)
             p.translate(-rect.x(), -rect.y())
@@ -987,51 +788,9 @@ class SnippingWindow(QWidget):
                 self.draw_shape(p, item)
             p.end()
             
-            print(f"[V65] Final canvas size: {canvas.width()}x{canvas.height()}")
-            
-            # 4. V65关键修复：使用PIL作为中间层写入剪贴板
-            # 因为QPixmap.toImage()在某些情况下会失败
-            qimg = canvas.toImage()
-            print(f"[V65] QImage format: {qimg.format()}, size: {qimg.width()}x{qimg.height()}")
-            
-            # 转换为PIL Image
-            width, height = qimg.width(), qimg.height()
-            ptr = qimg.bits()
-            ptr.setsize(height * qimg.bytesPerLine())
-            
-            # 使用PIL确保兼容性
-            from PIL import Image
-            pil_img = Image.frombytes("RGBA", (width, height), ptr.asstring())
-            
-            # 转换为RGB（去除透明通道，兼容性更好）
-            pil_img_rgb = pil_img.convert("RGB")
-            
-            # 使用PIL写入剪贴板
-            import win32clipboard
-            import io
-            
-            output = io.BytesIO()
-            pil_img_rgb.save(output, format="BMP")
-            data = output.getvalue()[14:]  # 移除BMP文件头
-            output.close()
-            
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-            win32clipboard.CloseClipboard()
-            
-            print("[V65] Saved to clipboard using PIL/win32clipboard")
-            
-            # 备用方案：同时设置Qt剪贴板
             QApplication.clipboard().setPixmap(canvas)
-            
-        except Exception as e:
-            print(f"[V65] Save error: {e}")
-            import traceback
-            traceback.print_exc()
+            comm.show_toast.emit(rect.x() + rect.width(), rect.y())
         
-        # 5. 显示提示并关闭
-        comm.show_toast.emit(rect.x() + rect.width(), rect.y())
         self.close_all()
 
     def close_all(self):
@@ -1042,16 +801,13 @@ def close_all_windows():
     for win in active_windows: win.close()
     active_windows = []
 
-# ================= 6. 托盘与控制 =================
-
+# ================= 8. 托盘与控制 =================
 reg_manager = RegistryManager()
 tray_icon = None
 
 def do_show_windows():
     global active_windows
-    if active_windows: 
-        close_all_windows()
-        return
+    if active_windows: close_all_windows(); return
     
     for screen in QApplication.screens():
         win = SnippingWindow(screen)
@@ -1066,6 +822,7 @@ def do_show_toast(x, y):
 def open_github():
     webbrowser.open(config.github_url)
 
+# [V61] 核心逻辑：重启自身
 def restart_program():
     try:
         if getattr(sys, 'frozen', False):
@@ -1077,13 +834,17 @@ def restart_program():
     except Exception:
         pass
 
+# [V61] 核心逻辑：心跳检测线程
 def watchdog_thread():
     last_check = time.time()
     while True:
-        time.sleep(5)
+        time.sleep(5) # 每5秒检查一次
         now = time.time()
+        # 如果两次检查的时间差超过 15 秒（允许一点误差），说明中间有一段时间CPU停止了（睡眠了）
         if now - last_check > 15:
+            # 此时等待2秒，给系统一点喘息时间（联网、加载驱动等）
             time.sleep(2)
+            # 执行重启
             restart_program()
         last_check = now
 
@@ -1129,16 +890,15 @@ def check_hotkey_and_trigger():
         comm.trigger_screenshot.emit()
 
 if __name__ == '__main__':
+    # 启动鼠标监听
     t_mouse = threading.Thread(target=start_mouse_thread, daemon=True)
     t_mouse.start()
     
+    # [V61] 启动心跳检测看门狗
     t_watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     t_watchdog.start()
     
-    os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
-    os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
-    
-    if hasattr(Qt, 'HighDpiScaleFactorRoundingPolicy'):
+    if hasattr(Qt.HighDpiScaleFactorRoundingPolicy, 'PassThrough'):
         QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         
     app = QApplication(sys.argv)
@@ -1148,11 +908,8 @@ if __name__ == '__main__':
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(do_show_toast)
     
-    try: 
-        keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
-    except: 
-        pass
+    try: keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
+    except: pass
     
-    print("Mouse4 V65 (Fixed Clipboard) Started.")
-    print(f"Config file: {config_mgr.config_file}")
+    print("Mouse4 V61 (Heartbeat Watchdog) Started.")
     sys.exit(app.exec())
