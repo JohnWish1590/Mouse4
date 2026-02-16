@@ -2,6 +2,16 @@
 
 All notable changes to the **Mouse4** project will be documented in this file.
 
+## [V61.0] - 2026-02-15 (Heartbeat Watchdog)
+### Added
+- **核心机制: 心跳看门狗 (Heartbeat Watchdog)**: 
+  - 弃用了依赖系统消息的被动唤醒方案（部分系统不发送广播）。
+  - 引入了**主动时间检测线程**：每 5 秒记录一次时间戳。如果检测到两次记录的时间差超过 15 秒（意味着 CPU 曾停止运行/睡眠），程序将强制判定系统发生过睡眠，并立即执行自我重启。
+  - **效果**: 无论系统电源策略如何优化，只要物理时间流逝，Mouse4 就能精准感知唤醒并复活热键。
+
+### Changed
+- **稳定性**: 这是目前对抗 Windows 睡眠机制最暴力但也最有效的终极方案，彻底解决了所有机型的“睡死”问题。
+
 ## [V60.0] - 2026-02-07 (Auto-Wake Final)
 ### Added
 - **智能唤醒**: 引入 `PowerMonitor` 隐形窗口监听 Windows 电源广播 (`WM_POWERBROADCAST`)。当电脑从睡眠/休眠唤醒时，程序能自动感知并执行静默重启，彻底解决系统底层钩子断裂导致热键失效的问题，实现“零人工干预”的无感复活。

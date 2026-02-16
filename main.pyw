@@ -1,7 +1,6 @@
 import sys
 import os
 import ctypes
-import ctypes.wintypes # 需要用到 wintypes 解析系统消息
 import datetime
 import threading
 import time
@@ -184,30 +183,6 @@ class SignalComm(QObject):
 
 comm = SignalComm()
 active_windows = []
-
-# [V60] 电源消息监听器：专门负责监听“睡眠/唤醒”
-class PowerMonitor(QWidget):
-    def __init__(self):
-        super().__init__()
-        # 仅仅是一个隐形窗口，用于接收系统消息
-        self.setWindowFlags(Qt.WindowType.Tool)
-        # 确保创建原生窗口句柄
-        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
-
-    def nativeEvent(self, eventType, message):
-        try:
-            if eventType == b'windows_generic_MSG' or eventType == 'windows_generic_MSG':
-                msg = ctypes.wintypes.MSG.from_address(int(message))
-                # WM_POWERBROADCAST = 536 (0x218)
-                if msg.message == 536:
-                    # PBT_APMRESUMEAUTOMATIC = 18 (0x12) - 系统从睡眠/休眠中恢复
-                    if msg.wParam == 18:
-                        print("System Resumed! Restarting program...")
-                        restart_program()
-                        return True, 0
-        except Exception:
-            pass
-        return super().nativeEvent(eventType, message)
 
 class SuccessToast(QWidget):
     def __init__(self, text="Saved!", parent=None):
@@ -847,7 +822,7 @@ def do_show_toast(x, y):
 def open_github():
     webbrowser.open(config.github_url)
 
-# [V60] 重启逻辑
+# [V61] 核心逻辑：重启自身
 def restart_program():
     try:
         if getattr(sys, 'frozen', False):
@@ -858,6 +833,20 @@ def restart_program():
         sys.exit()
     except Exception:
         pass
+
+# [V61] 核心逻辑：心跳检测线程
+def watchdog_thread():
+    last_check = time.time()
+    while True:
+        time.sleep(5) # 每5秒检查一次
+        now = time.time()
+        # 如果两次检查的时间差超过 15 秒（允许一点误差），说明中间有一段时间CPU停止了（睡眠了）
+        if now - last_check > 15:
+            # 此时等待2秒，给系统一点喘息时间（联网、加载驱动等）
+            time.sleep(2)
+            # 执行重启
+            restart_program()
+        last_check = now
 
 def setup_tray(app):
     global tray_icon
@@ -882,7 +871,7 @@ def setup_tray(app):
     menu = QMenu()
     
     menu.addAction("立即截图 (Ctrl+1)", comm.trigger_screenshot.emit)
-    menu.addAction("重启程序 (修复失效)", restart_program)
+    menu.addAction("重启程序 (手动修复)", restart_program)
     menu.addSeparator()
     
     rmenu = menu.addMenu("右键保存功能 (管理)")
@@ -901,8 +890,13 @@ def check_hotkey_and_trigger():
         comm.trigger_screenshot.emit()
 
 if __name__ == '__main__':
-    t = threading.Thread(target=start_mouse_thread, daemon=True)
-    t.start()
+    # 启动鼠标监听
+    t_mouse = threading.Thread(target=start_mouse_thread, daemon=True)
+    t_mouse.start()
+    
+    # [V61] 启动心跳检测看门狗
+    t_watchdog = threading.Thread(target=watchdog_thread, daemon=True)
+    t_watchdog.start()
     
     if hasattr(Qt.HighDpiScaleFactorRoundingPolicy, 'PassThrough'):
         QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
@@ -914,11 +908,8 @@ if __name__ == '__main__':
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(do_show_toast)
     
-    # [V60] 初始化电源监听器
-    power_monitor = PowerMonitor()
-    
     try: keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
     except: pass
     
-    print("Mouse4 V60 (Auto-Wake) Started.")
+    print("Mouse4 V61 (Heartbeat Watchdog) Started.")
     sys.exit(app.exec())
