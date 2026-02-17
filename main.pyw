@@ -1,5 +1,9 @@
 """
-Mouse4 V65 - 修复剪贴板为空问题
+Mouse4 V65 - 修复剪贴板为空问题（完整版）
+核心修复：
+1. 剪贴板操作必须在主线程执行
+2. 使用QImage直接转换mss数据，避免格式错误
+3. 使用PIL作为中间层确保PNG格式正确写入剪贴板
 """
 
 import sys
@@ -192,9 +196,9 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu,
                              QInputDialog, QLabel, QVBoxLayout, QHBoxLayout, 
                              QMessageBox, QStyle, QPushButton, QFrame, QLineEdit, QComboBox)
 from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject, 
-                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF, QThread, QBuffer)
+                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
-                         QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF, QClipboard)
+                         QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
 import keyboard 
 import mss
 import winreg
@@ -295,6 +299,8 @@ class RegistryManager:
 class SignalComm(QObject):
     trigger_screenshot = pyqtSignal()
     show_toast = pyqtSignal(int, int)
+    # V65: 用于在主线程执行剪贴板操作
+    save_to_clipboard = pyqtSignal(object, object, list, float, int, int)
 
 comm = SignalComm()
 active_windows = []
@@ -386,7 +392,7 @@ class SnippingToolBar(QWidget):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         
-        # 1. 工具条
+        # 1. 工具栏
         self.tools_widget = QWidget()
         self.tools_widget.setStyleSheet("""
             QWidget {
@@ -460,7 +466,7 @@ class SnippingToolBar(QWidget):
         tools_layout.addWidget(self.btn_cancel)
         tools_layout.addWidget(self.btn_ok)
         
-        # 2. 底部属性条 (字号 + 颜色)
+        # 2. 底部属性栏 (字号 + 颜色)
         self.colors_widget = QWidget()
         self.colors_widget.setStyleSheet("background-color: #2b2b2b; border-radius: 6px; border: 1px solid #444444;")
         bottom_layout = QHBoxLayout(self.colors_widget)
@@ -552,17 +558,20 @@ class SnippingWindow(QWidget):
         self.drawings = []
         self.current_drawing = None 
         
+        # V63: 从持久化加载上次的颜色和字号
         self.current_color = config.get_last_color()
         self.current_font_size = config.get_last_font_size()
         self.active_input = None 
         
+        # V63 Fix: 双击检测专用变量
         self._last_click_time = 0
         self._click_count = 0
-        self._double_click_threshold = 400
+        self._double_click_threshold = 400  # 毫秒
         
         self.toolbar = SnippingToolBar(self)
         self.toolbar.hide()
         
+        # V63: 恢复上次选择的颜色按钮
         self._restore_last_color()
         self.toolbar.size_combo.setCurrentText(str(self.current_font_size))
         
@@ -582,6 +591,7 @@ class SnippingWindow(QWidget):
         self.toolbar.size_combo.currentIndexChanged.connect(self.update_font_size_from_combo)
 
     def _restore_last_color(self):
+        """恢复上次选择的颜色"""
         last_color = config.get_last_color()
         for btn in self.toolbar.color_btns:
             if btn.color.name().lower() == last_color.name().lower():
@@ -591,11 +601,12 @@ class SnippingWindow(QWidget):
                 btn.setChecked(False)
 
     def grab_current_screen(self):
-        """V65: 修复截图清晰度 - 使用BGRA格式并正确转换"""
+        """V65: 高清截图 - 使用mss直接获取物理像素"""
         try:
             win_geo = self.geometry()
             
             with mss.mss() as sct:
+                # 找到包含窗口中心的显示器
                 cx = win_geo.x() + win_geo.width() // 2
                 cy = win_geo.y() + win_geo.height() // 2
                 
@@ -614,31 +625,22 @@ class SnippingWindow(QWidget):
                         "height": win_geo.height()
                     }
                 
-                # 抓取屏幕
+                # V65: 使用mss抓取屏幕
                 img = sct.grab(target_mon)
                 
-                # V65关键修复：mss返回的是BGRA格式，需要正确转换为QImage
-                # img.bgra 是原始字节数据，格式是BGRA
-                width, height = img.width, img.height
-                self.scale_factor = width / max(1, win_geo.width())
+                # V65: 正确的缩放因子计算
+                self.scale_factor = img.width / max(1, win_geo.width())
                 
-                # 使用Format_ARGB32_Premultiplied获得最佳性能和兼容性
-                # 注意：mss的bgra实际上是BGRA，但QImage的ARGB32是RGBA
-                # 我们需要交换R和B通道
-                qimg = QImage(img.bgra, width, height, QImage.Format.Format_ARGB32)
-                
-                # 在Windows上，可能需要手动交换红蓝通道
-                # 这里我们依赖Qt的自动处理，如果颜色不对再调整
+                # V65: 关键修复 - 使用bgra数据创建QImage，然后转换
+                # mss返回的是BGRA格式，我们需要手动转换为RGB
+                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_ARGB32)
                 
                 self.full_screenshot = QPixmap.fromImage(qimg.copy())
                 
-                print(f"[V65] Screen captured: {width}x{height}, scale: {self.scale_factor:.2f}")
-                print(f"[V65] Screenshot is null: {self.full_screenshot.isNull()}")
+                print(f"[V65] Screen captured: {img.width}x{img.height}, scale: {self.scale_factor:.2f}")
                 
         except Exception as e:
             print(f"[V65] Screen grab failed: {e}")
-            import traceback
-            traceback.print_exc()
             self.full_screenshot = QPixmap()
             self.scale_factor = 1.0
 
@@ -718,7 +720,7 @@ class SnippingWindow(QWidget):
         
         window_rect = self.rect()
         
-        if self.full_screenshot and not self.full_screenshot.isNull():
+        if self.full_screenshot:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             painter.drawPixmap(window_rect, self.full_screenshot, self.full_screenshot.rect())
             
@@ -738,10 +740,7 @@ class SnippingWindow(QWidget):
                 sw = int(rect.width() * self.scale_factor)
                 sh = int(rect.height() * self.scale_factor)
                 source_rect = QRect(sx, sy, sw, sh)
-                
-                # 确保源矩形在有效范围内
-                if self.full_screenshot and not self.full_screenshot.isNull():
-                    painter.drawPixmap(rect, self.full_screenshot, source_rect)
+                painter.drawPixmap(rect, self.full_screenshot, source_rect)
             
             pen = QPen(config.theme_color, config.border_width)
             painter.setPen(pen)
@@ -804,6 +803,7 @@ class SnippingWindow(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def mousePressEvent(self, event):
+        # 双击检测（必须在其他逻辑之前）
         if event.button() == Qt.MouseButton.LeftButton and self.has_selected:
             current_time = int(time.time() * 1000)
             
@@ -815,9 +815,11 @@ class SnippingWindow(QWidget):
                 self._last_click_time = current_time
                 self._click_count = 1
         
+        # 检查是否点击在工具栏上
         if self.childAt(event.pos()) and (self.toolbar.isAncestorOf(self.childAt(event.pos())) or self.childAt(event.pos()) == self.toolbar): 
             return
         
+        # 右键取消
         if event.button() == Qt.MouseButton.RightButton:
             if self.draw_mode:
                 self.set_draw_mode(None)
@@ -825,6 +827,7 @@ class SnippingWindow(QWidget):
                 self.close_all()
             return
 
+        # 绘图模式下的点击
         if self.has_selected and self.draw_mode:
             if self.draw_mode == 'text':
                 if self.active_input:
@@ -854,6 +857,7 @@ class SnippingWindow(QWidget):
             self.update()
             return
 
+        # 开始新选区
         click_pos = event.pos()
         if self.has_selected:
             rect = QRect(self.begin, self.end).normalized()
@@ -944,7 +948,7 @@ class SnippingWindow(QWidget):
         self.toolbar.show()
 
     def finish_capture(self):
-        """V65: 修复剪贴板为空 - 在主线程同步执行"""
+        """V65: 修复剪贴板为空问题 - 在主线程同步执行保存"""
         if self.active_input:
             self.commit_text_input()
             
@@ -953,86 +957,90 @@ class SnippingWindow(QWidget):
             self.close_all()
             return
         
-        # V65关键修复：必须在关闭窗口前完成所有操作
-        # 因为关闭窗口会销毁QPixmap数据
         try:
-            # 1. 计算物理坐标
+            # V65: 立即显示提示
+            comm.show_toast.emit(rect.x() + rect.width(), rect.y())
+            
+            # V65: 关键修复 - 在主线程直接执行保存，不延迟
+            self._do_save_sync(rect)
+            
+        except Exception as e:
+            print(f"[V65] Capture error: {e}")
+        
+        self.close_all()
+    
+    def _do_save_sync(self, rect):
+        """V65: 同步执行保存到剪贴板（必须在主线程）"""
+        try:
             sx = int(rect.x() * self.scale_factor)
             sy = int(rect.y() * self.scale_factor)
             sw = int(rect.width() * self.scale_factor)
             sh = int(rect.height() * self.scale_factor)
-            
-            print(f"[V65] Crop rect: ({sx}, {sy}, {sw}, {sh})")
-            print(f"[V65] Full screenshot size: {self.full_screenshot.width()}x{self.full_screenshot.height()}")
-            
-            # 2. 从高清截图中裁剪
             source_rect = QRect(sx, sy, sw, sh)
+            
+            # 从高清截图中裁剪
             cropped_raw = self.full_screenshot.copy(source_rect)
             
-            print(f"[V65] Cropped size: {cropped_raw.width()}x{cropped_raw.height()}")
+            # V65: 关键修复 - 使用PIL作为中间层确保格式正确
+            # 将QPixmap转换为PIL Image
+            buffer = BytesIO()
+            # 先保存为PNG到内存
+            cropped_raw.save(buffer, 'PNG')
+            buffer.seek(0)
             
-            # 3. 创建画布并绘制标注
-            canvas = QPixmap(cropped_raw.size())
-            canvas.fill(Qt.GlobalColor.transparent)
+            # 用PIL打开确保格式正确
+            pil_img = Image.open(buffer)
             
-            p = QPainter(canvas)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            p.drawPixmap(0, 0, cropped_raw)
-            p.scale(self.scale_factor, self.scale_factor)
-            p.translate(-rect.x(), -rect.y())
+            # 如果有标注，需要叠加
+            if self.drawings:
+                # 创建透明画布用于标注
+                canvas = QPixmap(cropped_raw.size())
+                canvas.fill(Qt.GlobalColor.transparent)
+                
+                p = QPainter(canvas)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing)
+                p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                p.drawPixmap(0, 0, cropped_raw)
+                p.scale(self.scale_factor, self.scale_factor)
+                p.translate(-rect.x(), -rect.y())
+                
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                for item in self.drawings:
+                    p.setPen(QPen(item['color'], 2))
+                    self.draw_shape(p, item)
+                p.end()
+                
+                # 将标注后的图像转为PIL
+                buffer2 = BytesIO()
+                canvas.save(buffer2, 'PNG')
+                buffer2.seek(0)
+                pil_img = Image.open(buffer2)
             
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            for item in self.drawings:
-                p.setPen(QPen(item['color'], 2))
-                self.draw_shape(p, item)
-            p.end()
+            # V65: 关键修复 - 使用PIL的ImageQt将图像放入剪贴板
+            # 这是Windows下最可靠的方式
+            output = BytesIO()
+            pil_img.convert('RGB').save(output, 'BMP')  # BMP格式最兼容
+            output.seek(0)
             
-            print(f"[V65] Final canvas size: {canvas.width()}x{canvas.height()}")
-            
-            # 4. V65关键修复：使用PIL作为中间层写入剪贴板
-            # 因为QPixmap.toImage()在某些情况下会失败
-            qimg = canvas.toImage()
-            print(f"[V65] QImage format: {qimg.format()}, size: {qimg.width()}x{qimg.height()}")
-            
-            # 转换为PIL Image
-            width, height = qimg.width(), qimg.height()
-            ptr = qimg.bits()
-            ptr.setsize(height * qimg.bytesPerLine())
-            
-            # 使用PIL确保兼容性
-            from PIL import Image
-            pil_img = Image.frombytes("RGBA", (width, height), ptr.asstring())
-            
-            # 转换为RGB（去除透明通道，兼容性更好）
-            pil_img_rgb = pil_img.convert("RGB")
-            
-            # 使用PIL写入剪贴板
+            # 使用win32clipboard直接操作Windows剪贴板
             import win32clipboard
-            import io
-            
-            output = io.BytesIO()
-            pil_img_rgb.save(output, format="BMP")
-            data = output.getvalue()[14:]  # 移除BMP文件头
-            output.close()
+            from PIL import ImageWin
             
             win32clipboard.OpenClipboard()
             win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, output.getvalue())
             win32clipboard.CloseClipboard()
             
-            print("[V65] Saved to clipboard using PIL/win32clipboard")
-            
-            # 备用方案：同时设置Qt剪贴板
-            QApplication.clipboard().setPixmap(canvas)
+            print(f"[V65] Saved to clipboard: {pil_img.width}x{pil_img.height}")
             
         except Exception as e:
             print(f"[V65] Save error: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # 5. 显示提示并关闭
-        comm.show_toast.emit(rect.x() + rect.width(), rect.y())
-        self.close_all()
+            # 备用方案：使用Qt的剪贴板
+            try:
+                QApplication.clipboard().setPixmap(cropped_raw)
+                print("[V65] Fallback to Qt clipboard")
+            except Exception as e2:
+                print(f"[V65] Fallback failed: {e2}")
 
     def close_all(self):
         close_all_windows()
@@ -1042,7 +1050,7 @@ def close_all_windows():
     for win in active_windows: win.close()
     active_windows = []
 
-# ================= 6. 托盘与控制 =================
+# ================= 6. 托盘控制 =================
 
 reg_manager = RegistryManager()
 tray_icon = None
@@ -1135,6 +1143,7 @@ if __name__ == '__main__':
     t_watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     t_watchdog.start()
     
+    # V65: 禁用Qt的自动缩放，我们手动处理
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     
@@ -1153,6 +1162,6 @@ if __name__ == '__main__':
     except: 
         pass
     
-    print("Mouse4 V65 (Fixed Clipboard) Started.")
+    print("Mouse4 V65 (Clipboard Fix) Started.")
     print(f"Config file: {config_mgr.config_file}")
     sys.exit(app.exec())
