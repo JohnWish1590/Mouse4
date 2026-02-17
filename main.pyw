@@ -1,9 +1,6 @@
 """
-Mouse4 V65 - 修复剪贴板为空问题（完整版）
-核心修复：
-1. 剪贴板操作必须在主线程执行
-2. 使用QImage直接转换mss数据，避免格式错误
-3. 使用PIL作为中间层确保PNG格式正确写入剪贴板
+Mouse4 V66 - 修复睡眠后快捷键失效
+核心修复：看门狗检测到睡眠后优先重新注册热键，失败才重启
 """
 
 import sys
@@ -180,7 +177,7 @@ def run_paste_mode_safe(args):
 if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
-# V65: DPI 感知设置
+# V66: DPI 感知设置
 try:
     ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except:
@@ -282,7 +279,7 @@ class RegistryManager:
             cmd_key = winreg.CreateKey(self.base_key, self.key_path + r"\command")
             winreg.SetValue(cmd_key, "", winreg.REG_SZ, command_str)
             winreg.CloseKey(cmd_key)
-            return True, "注册成功！\n请先点'关闭'，该功能即刻生效。"
+            return True, "注册成功！\n请先点'关闭'，该功能立刻生效。"
         except Exception as e:
             return False, f"注册失败: {e}"
 
@@ -299,8 +296,6 @@ class RegistryManager:
 class SignalComm(QObject):
     trigger_screenshot = pyqtSignal()
     show_toast = pyqtSignal(int, int)
-    # V65: 用于在主线程执行剪贴板操作
-    save_to_clipboard = pyqtSignal(object, object, list, float, int, int)
 
 comm = SignalComm()
 active_windows = []
@@ -466,7 +461,7 @@ class SnippingToolBar(QWidget):
         tools_layout.addWidget(self.btn_cancel)
         tools_layout.addWidget(self.btn_ok)
         
-        # 2. 底部属性栏 (字号 + 颜色)
+        # 2. 底部属性栏（字号 + 颜色）
         self.colors_widget = QWidget()
         self.colors_widget.setStyleSheet("background-color: #2b2b2b; border-radius: 6px; border: 1px solid #444444;")
         bottom_layout = QHBoxLayout(self.colors_widget)
@@ -601,7 +596,7 @@ class SnippingWindow(QWidget):
                 btn.setChecked(False)
 
     def grab_current_screen(self):
-        """V65: 高清截图 - 使用mss直接获取物理像素"""
+        """V66: 高清截图 - 使用mss直接获取物理像素"""
         try:
             win_geo = self.geometry()
             
@@ -625,22 +620,22 @@ class SnippingWindow(QWidget):
                         "height": win_geo.height()
                     }
                 
-                # V65: 使用mss抓取屏幕
+                # V66: 使用mss抓取屏幕
                 img = sct.grab(target_mon)
                 
-                # V65: 正确的缩放因子计算
+                # V66: 正确的缩放因子计算
                 self.scale_factor = img.width / max(1, win_geo.width())
                 
-                # V65: 关键修复 - 使用bgra数据创建QImage，然后转换
+                # V66: 关键修复 - 使用bgra数据创建QImage，然后转换
                 # mss返回的是BGRA格式，我们需要手动转换为RGB
                 qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_ARGB32)
                 
                 self.full_screenshot = QPixmap.fromImage(qimg.copy())
                 
-                print(f"[V65] Screen captured: {img.width}x{img.height}, scale: {self.scale_factor:.2f}")
+                print(f"[V66] Screen captured: {img.width}x{img.height}, scale: {self.scale_factor:.2f}")
                 
         except Exception as e:
-            print(f"[V65] Screen grab failed: {e}")
+            print(f"[V66] Screen grab failed: {e}")
             self.full_screenshot = QPixmap()
             self.scale_factor = 1.0
 
@@ -948,7 +943,7 @@ class SnippingWindow(QWidget):
         self.toolbar.show()
 
     def finish_capture(self):
-        """V65: 修复剪贴板为空问题 - 在主线程同步执行保存"""
+        """V66: 修复剪贴板为空问题 - 在主线程同步执行保存"""
         if self.active_input:
             self.commit_text_input()
             
@@ -958,19 +953,19 @@ class SnippingWindow(QWidget):
             return
         
         try:
-            # V65: 立即显示提示
+            # V66: 立即显示提示
             comm.show_toast.emit(rect.x() + rect.width(), rect.y())
             
-            # V65: 关键修复 - 在主线程直接执行保存，不延迟
+            # V66: 关键修复 - 在主线程直接执行保存，不延迟
             self._do_save_sync(rect)
             
         except Exception as e:
-            print(f"[V65] Capture error: {e}")
+            print(f"[V66] Capture error: {e}")
         
         self.close_all()
     
     def _do_save_sync(self, rect):
-        """V65: 同步执行保存到剪贴板（必须在主线程）"""
+        """V66: 同步执行保存到剪贴板（必须在主线程）"""
         try:
             sx = int(rect.x() * self.scale_factor)
             sy = int(rect.y() * self.scale_factor)
@@ -981,7 +976,7 @@ class SnippingWindow(QWidget):
             # 从高清截图中裁剪
             cropped_raw = self.full_screenshot.copy(source_rect)
             
-            # V65: 关键修复 - 使用PIL作为中间层确保格式正确
+            # V66: 关键修复 - 使用PIL作为中间层确保格式正确
             # 将QPixmap转换为PIL Image
             buffer = BytesIO()
             # 先保存为PNG到内存
@@ -1016,7 +1011,7 @@ class SnippingWindow(QWidget):
                 buffer2.seek(0)
                 pil_img = Image.open(buffer2)
             
-            # V65: 关键修复 - 使用PIL的ImageQt将图像放入剪贴板
+            # V66: 关键修复 - 使用PIL的ImageQt将图像放入剪贴板
             # 这是Windows下最可靠的方式
             output = BytesIO()
             pil_img.convert('RGB').save(output, 'BMP')  # BMP格式最兼容
@@ -1031,16 +1026,16 @@ class SnippingWindow(QWidget):
             win32clipboard.SetClipboardData(win32clipboard.CF_DIB, output.getvalue())
             win32clipboard.CloseClipboard()
             
-            print(f"[V65] Saved to clipboard: {pil_img.width}x{pil_img.height}")
+            print(f"[V66] Saved to clipboard: {pil_img.width}x{pil_img.height}")
             
         except Exception as e:
-            print(f"[V65] Save error: {e}")
+            print(f"[V66] Save error: {e}")
             # 备用方案：使用Qt的剪贴板
             try:
                 QApplication.clipboard().setPixmap(cropped_raw)
-                print("[V65] Fallback to Qt clipboard")
+                print("[V66] Fallback to Qt clipboard")
             except Exception as e2:
-                print(f"[V65] Fallback failed: {e2}")
+                print(f"[V66] Fallback failed: {e2}")
 
     def close_all(self):
         close_all_windows()
@@ -1074,25 +1069,60 @@ def do_show_toast(x, y):
 def open_github():
     webbrowser.open(config.github_url)
 
+# V66: 修复重启时热键注册问题 - 干净重启
 def restart_program():
+    """干净重启：彻底释放资源并启动新进程"""
     try:
+        print("[Restart] Initiating clean restart...")
+        
+        # 关键：先清理keyboard钩子
+        try:
+            keyboard.unhook_all()
+            print("[Restart] All hotkeys unhooked")
+        except Exception as e:
+            print(f"[Restart] Unhook warning: {e}")
+        
+        # 启动新进程
         if getattr(sys, 'frozen', False):
             subprocess.Popen([sys.executable] + sys.argv[1:])
         else:
             subprocess.Popen([sys.executable, sys.argv[0]] + sys.argv[1:])
+        
+        print("[Restart] New process started, exiting old process...")
+        
+        # 关键延迟：确保新进程初始化完成，旧进程钩子释放
+        time.sleep(0.8)
+        
+        # 优雅退出
         QApplication.quit()
-        sys.exit()
-    except Exception:
-        pass
+        time.sleep(0.2)
+        os._exit(0)  # 强制退出，不执行清理（避免钩子重新注册）
+        
+    except Exception as e:
+        print(f"[Restart] Fatal error: {e}")
+        os._exit(1)
 
+# V66: 修复看门狗 - 优先重新注册热键，失败才重启
 def watchdog_thread():
+    """增强型看门狗：睡眠检测后优先重新注册，失败才重启"""
     last_check = time.time()
     while True:
         time.sleep(5)
         now = time.time()
         if now - last_check > 15:
-            time.sleep(2)
-            restart_program()
+            print("[Watchdog] Sleep detected!")
+            
+            # 策略：先尝试轻量级重新注册
+            try:
+                keyboard.unhook_all()
+                time.sleep(0.5)
+                keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
+                print("[Watchdog] Hotkey re-registered successfully")
+            except Exception as e:
+                print(f"[Watchdog] Re-register failed ({e}), forcing restart...")
+                restart_program()
+                return  # 重启后此线程结束
+                
         last_check = now
 
 def setup_tray(app):
@@ -1118,7 +1148,7 @@ def setup_tray(app):
     menu = QMenu()
     
     menu.addAction("立即截图 (Ctrl+1)", comm.trigger_screenshot.emit)
-    menu.addAction("重启程序 (手动修复)", restart_program)
+    menu.addAction("重启程序 (修复失效)", restart_program)
     menu.addSeparator()
     
     rmenu = menu.addMenu("右键保存功能 (管理)")
@@ -1136,6 +1166,20 @@ def check_hotkey_and_trigger():
     if ctypes.windll.user32.GetAsyncKeyState(0x11) & 0x8000:
         comm.trigger_screenshot.emit()
 
+# V66: 带重试的热键注册
+def setup_hotkey_with_retry(max_retries=3):
+    """带重试的热键注册"""
+    for i in range(max_retries):
+        try:
+            keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
+            print(f"[Setup] Hotkey registered on attempt {i+1}")
+            return True
+        except Exception as e:
+            print(f"[Setup] Attempt {i+1}/{max_retries} failed: {e}")
+            if i < max_retries - 1:
+                time.sleep(0.5 * (i + 1))
+    return False
+
 if __name__ == '__main__':
     t_mouse = threading.Thread(target=start_mouse_thread, daemon=True)
     t_mouse.start()
@@ -1143,7 +1187,7 @@ if __name__ == '__main__':
     t_watchdog = threading.Thread(target=watchdog_thread, daemon=True)
     t_watchdog.start()
     
-    # V65: 禁用Qt的自动缩放，我们手动处理
+    # V66: 禁用Qt的自动缩放，我们手动处理
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     
@@ -1157,11 +1201,11 @@ if __name__ == '__main__':
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(do_show_toast)
     
-    try: 
-        keyboard.add_hotkey(config.hotkey, check_hotkey_and_trigger)
-    except: 
-        pass
+    # V66: 使用带重试的热键注册
+    hotkey_ok = setup_hotkey_with_retry()
+    if not hotkey_ok:
+        print("[Main] WARNING: Failed to register hotkey after retries")
     
-    print("Mouse4 V65 (Clipboard Fix) Started.")
+    print("Mouse4 V66 (Sleep Fix) Started.")
     print(f"Config file: {config_mgr.config_file}")
     sys.exit(app.exec())
