@@ -2,6 +2,29 @@
 
 All notable changes to the **Mouse4** project will be documented in this file.
 
+## [V75.0] - 2026-02-21 (Micro-Surgery & Sleep Immunity)
+### Fixed
+- 睡眠断连修复 (核心突破): 彻底解决系统长时间睡眠/休眠唤醒后 `Ctrl+1` 快捷键失效的问题。
+  - 弃用了容易导致单文件打包 (PyInstaller `-F`) 文件锁死、引发 `Failed to remove temporary directory` 和 `ImportError` 弹窗的“进程自杀式重启”方案。
+  - 引入“微创手术 (In-place Re-hook)”机制：看门狗检测到睡眠唤醒后，仅在内存中动态卸载并重新注册 `keyboard` 底层钩子，实现毫秒级无感复活。
+- 鼠标监听掉线: 修复睡眠唤醒后双击空白处返回失效的问题。为 `pynput` 监听线程引入“不死图腾 (Immortal Loop)”，监听器崩溃或被系统掐断后能在 2 秒内自动原地重启。
+
+### Changed
+- 架构回滚与稳定: 移除为了妥协进程重启而引入的“延迟加载 (Lazy Load)”，恢复所有重型库（PIL, mss）的全局前置导入，彻底杜绝运行时的环境异常。
+- 打包规范: 废弃 `--runtime-tmpdir` 临时目录绑定，回归最干净的标准单文件打包命令，不留任何系统垃圾。
+
+## [V72.0] - 2026-02-20 (Clipboard Ultimate Fix)
+### Fixed
+- 剪贴板为空: 彻底修复 V66 之后版本由于数据结构截断错误导致的“截图后无法粘贴”问题。
+- 格式重构: 不再信任 Qt 原生的 BMP 数据导出。强制引入 `PIL` (Pillow) 作为图像中转层，在内存中生成标准 BMP 流，精准剥离 14 字节文件头后写入 Windows 剪贴板 (`CF_DIB`)，实现 100% 粘贴成功率。
+
+## [V67.0 - V69.0] - 2026-02-18 (Environment Isolation - Experimental)
+### Changed
+- 重启机制探索: 尝试解决打包环境下 `subprocess.Popen` 重启导致的 `ModuleNotFoundError: PyQt6` 问题。
+- 环境清洗: 引入了环境变量清洗逻辑，在重启前手动删除 `_MEIPASS` 变量，迫使新进程重新解压运行环境（该方案虽有效，但由于 I/O 踩踏风险，最终在 V75 被更优雅的重连机制替代）。
+
+---
+
 ## [V66] - 2026-02-17 (Cross-Screen Capture)
 ### Added
 - **跨屏幕截图**: 支持在多个显示器之间拖拽选区，突破单屏限制。
