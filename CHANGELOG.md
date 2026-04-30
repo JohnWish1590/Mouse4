@@ -2,18 +2,18 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
-## [V77.1] - 2026-04-30 (纯净修复版 - The Clean Fix)
-### 核心亮点
+## [V90.0] - 2026-04-30 (终极纯净版 - The Ultimate Clean)
+### Added
 - **架构精简回滚**: 移除了实验性的延迟加载 (Lazy Load) 和冗余桥接层 (QBuffer/QIODevice)，回归纯净架构。单文件体量更小、运行时依赖更稳固。
 - **全域崩溃拦截网 (Black Box)**: 挂载 `sys.excepthook` + `threading.excepthook` 双层拦截器，主线程或后台线程发生未处理异常时自动弹出可视化报警对话框并记录日志，告别静默死亡。
 - **系统级强力重启 (Hard Restart)**: 看门狗线程每 5 秒心跳侦测时间跳变，一旦检测到系统深度睡眠唤醒，立即启动全新进程并湮灭旧进程，确保 100% 干净的热键抢占。
 - **原生热键接管 (Native Hotkey)**: 彻底废弃第三方 `keyboard` 库，改用 Windows `RegisterHotKey` API 注册全局热键 Ctrl+1。热键直接注册于内核消息队列，不受睡眠唤醒影响。
-### 错误修复
+### Fixed
 - **睡眠唤醒 pynput 崩溃**: 将 `pynput` 提前到模块最顶层全局加载，锁定内存地址，彻底解决 Windows 睡眠唤醒后的 `ImportError`。
 - **工具栏越界遮挡**: 重写 `show_toolbar` 坐标计算逻辑，选区靠近屏幕底部时工具栏自动翻转到选区上方，防止溢出不可见。
 - **托盘图标随机消失**: 在主线程入口建立 `tray_icon_ref` 全局强引用，防止托盘图标被 Python 垃圾回收器 (GC) 错误回收。
 - **移除 DPI 冲突告警**: 物理移除手动 DPI 设置调用，完全信任 PyQt6 原生 `Per-Monitor V2` 策略。
-### 技术细节
+### Changed
 - 恢复所有重型库的全局前置导入，杜绝单文件 PyInstaller 打包环境下的运行时异常
 - 采用 PIL 中转方案精准剥离 BMP 文件头后写入剪贴板 (`CF_DIB`)，确保 100% 粘贴成功率
 - 净化日志系统，使用 `QT_LOGGING_RULES` 物理静音 DPI 重复声明的非致命警告
