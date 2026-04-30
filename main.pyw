@@ -1,5 +1,5 @@
 """
-Mouse4 V77 - 全域崩溃拦截版 (纯净修复版)
+Mouse4 V90 - 全域崩溃拦截版 (纯净修复版)
 核心：Hard Restart 强力重启 + PIL 剪贴板 + 全局 Exception Hook 异常拦截
 修复：睡眠 pynput ImportError + 工具栏越界遮挡 + 托盘图标偶发消失
 """
