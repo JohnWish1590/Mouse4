@@ -525,9 +525,9 @@ class SnippingWindow(QWidget):
             sw = int(rect.width() * self.scale_factor)
             sh = int(rect.height() * self.scale_factor)
             source_rect = QRect(sx, sy, sw, sh)
-            
+
             cropped_raw = self.full_screenshot.copy(source_rect)
-            
+
             if self.drawings:
                 canvas = QPixmap(cropped_raw.size())
                 canvas.fill(Qt.GlobalColor.transparent)
@@ -545,25 +545,47 @@ class SnippingWindow(QWidget):
             else:
                 img_to_save = cropped_raw
 
+            # 优先 Qt 剪贴板 (睡眠唤醒后比 win32clipboard 稳定)
+            try:
+                QApplication.clipboard().setPixmap(img_to_save)
+                config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via Qt)")
+                return
+            except Exception as e1:
+                config_mgr.log(f"[Clipboard] Qt fallback failed: {e1}")
+
+            # Qt 失败后再试 win32 DIB 方式 (带重试)
             buf_png = BytesIO()
             img_to_save.save(buf_png, "PNG")
             buf_png.seek(0)
-            
+
             pil_img = Image.open(buf_png)
             output = BytesIO()
             pil_img.convert("RGB").save(output, "BMP")
-            data = output.getvalue()[14:] 
-            
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
-            win32clipboard.CloseClipboard()
-            
-            config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via PIL)")
-            
+            data = output.getvalue()[14:]
+
+            for attempt in range(3):
+                try:
+                    win32clipboard.OpenClipboard()
+                    win32clipboard.EmptyClipboard()
+                    win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                    win32clipboard.CloseClipboard()
+                    config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via PIL/DIB attempt {attempt+1})")
+                    return
+                except Exception as e2:
+                    config_mgr.log(f"[Clipboard] DIB attempt {attempt+1} failed: {e2}")
+                    time.sleep(0.2)
+                    try: win32clipboard.CloseClipboard()
+                    except: pass
+
+            # 全部失败，最后再试一次 Qt
+            try: QApplication.clipboard().setPixmap(img_to_save)
+            except: pass
+
         except Exception as e:
             config_mgr.log(f"[Clipboard] Error: {e}")
-            try: QApplication.clipboard().setPixmap(img_to_save)
+            try:
+                if 'img_to_save' in dir():
+                    QApplication.clipboard().setPixmap(img_to_save)
             except: pass
 
     def close_all(self):
