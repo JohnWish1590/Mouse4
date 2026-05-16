@@ -2,6 +2,14 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V92.0] - 2026-05-16 (睡眠唤醒终极修复 V2 - Hotkey Thread First)
+### Fixed
+- **热键线程永不启动**: V91 的热键线程在 `QApplication(sys.argv)` 之后启动，睡眠恢复后 QApplication 初始化可能挂起，导致线程根本跑不起来。现在热键线程提到最前面(第一行)，不等 QApp，确保无论系统状态如何都能启动。
+- **信号时序安全**: 热键线程启动时信号尚未连接，首次按下 Ctrl+1 会被忽略，但不会报错。一旦 QApplication 就绪、信号连接完成，后续按键正常工作。
+### Changed
+- 版本号 V91.0 → V92.0
+- 启动顺序: 热键线程 → 看门狗 → 鼠标线程 → QApp
+
 ## [V91.0] - 2026-05-16 (睡眠唤醒终极修复 - The Ultimate Wake-Up Fix)
 ### Added
 - **RegisterHotKey 自动重试**: 睡眠恢复后旧进程刚 `os._exit`，Windows 还没清理完旧热键，新进程立即注册会失败。现在最多重试 10 次(间隔 1s)，确保热键 100% 注册成功。

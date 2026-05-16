@@ -1,7 +1,7 @@
 """
-Mouse4 V91 - 睡眠唤醒终极修复版
-核心：1. RegisterHotKey 重试机制 2. Qt 剪贴板优先 3. 移除 keyboard 依赖
-修复：睡眠唤醒后热键注册失败 + 剪贴板崩溃
+Mouse4 V92 - 睡眠唤醒终极修复版 V2
+核心：热键线程提前启动(不等QApp) + RegisterHotKey 重试 + Qt 剪贴板优先
+修复：睡眠后 QApplication 初始化挂起导致热键线程永不启动
 """
 
 import sys
@@ -87,7 +87,7 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V91 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V92 Started (PID: {os.getpid()}) ===")
 
 # ================= 1.5 全局异常拦截网 (黑匣子) =================
 
@@ -699,6 +699,8 @@ def start_hotkey_listener():
 
 
 if __name__ == '__main__':
+    # 热键线程放最前面，不等 QApplication（睡眠后 QApp 初始化可能卡住）
+    threading.Thread(target=start_hotkey_listener, daemon=True, name="HotkeyThread").start()
     threading.Thread(target=watchdog_thread, daemon=True, name="WatchdogThread").start()
     threading.Thread(target=start_mouse_thread, daemon=True, name="MouseHookThread").start()
 
@@ -715,8 +717,5 @@ if __name__ == '__main__':
 
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(lambda x,y: SuccessToast("Saved!").show_anim(x,y))
-
-    # 启动原生热键监听（替换 keyboard.add_hotkey，避免打包后热键失灵）
-    threading.Thread(target=start_hotkey_listener, daemon=True, name="HotkeyThread").start()
 
     sys.exit(app.exec())
