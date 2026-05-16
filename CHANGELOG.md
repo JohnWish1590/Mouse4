@@ -2,6 +2,19 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V91.0] - 2026-05-16 (睡眠唤醒终极修复 - The Ultimate Wake-Up Fix)
+### Added
+- **RegisterHotKey 自动重试**: 睡眠恢复后旧进程刚 `os._exit`，Windows 还没清理完旧热键，新进程立即注册会失败。现在最多重试 10 次(间隔 1s)，确保热键 100% 注册成功。
+- **Qt 剪贴板优先**: 截图保存时优先使用 `QApplication.clipboard().setPixmap()`，睡眠唤醒后比 `win32clipboard.OpenClipboard()` 稳定得多。
+- **DIB 方式带 3 次重试**: 如果 Qt 剪贴板失败，自动降级到 DIB 方式并重试 3 次，每次确保 `CloseClipboard`，防止句柄泄漏。
+### Fixed
+- **睡眠唤醒后热键失效** (Issue #2): 新进程启动后 `RegisterHotKey` 因旧进程热键未释放而失败，导致热键完全不可用。用户需手动重启一次才能恢复。
+- **剪贴板崩溃** (Issue #1): `win32clipboard.OpenClipboard()` 在睡眠恢复后抛出 `arguments did not match any overloaded call`，截图后无法保存到剪贴板，弹出红叉错误框。
+- **移除 keyboard 模块依赖**: `keyboard.press_and_release('backspace')` 替换为 `win32api.keybd_event`，彻底消除 `keyboard` 模块在 PyInstaller 环境和睡眠场景下的不稳定性。
+### Changed
+- 版本号 V90.0 → V91.0
+- 启动日志从 `V77` 修正为 `V91`
+
 ## [V90.0] - 2026-04-30 (终极纯净版 - The Ultimate Clean)
 ### Added
 - **架构精简回滚**: 移除了实验性的延迟加载 (Lazy Load) 和冗余桥接层 (QBuffer/QIODevice)，回归纯净架构。单文件体量更小、运行时依赖更稳固。

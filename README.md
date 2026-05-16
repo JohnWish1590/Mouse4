@@ -3,7 +3,7 @@
 一个简单、纯粹的 Windows 鼠标增强程序。它只有两个核心功能：双击返回 和 截图。
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-V90.0-green.svg" alt="Version V90.0">
+  <img src="https://img.shields.io/badge/version-V91.0-green.svg" alt="Version V91.0">
   <img src="https://img.shields.io/badge/platform-Windows-blue.svg" alt="Platform Windows">
   <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License MIT">
 </p>
@@ -15,9 +15,9 @@
 
 ### 2. 高清截图与标注
 按下快捷键（默认 `Ctrl + 1`）即可触发物理像素级的高清截图。
-* **睡眠免疫**：独创后台“微创重连”机制，电脑无论休眠/睡眠多久，唤醒后快捷键 100% 稳定响应，不崩溃、不失效。
+* **睡眠免疫**：基于 Windows 原生 RegisterHotKey API + 自动重试机制，睡眠恢复后旧进程热键未释放时自动等待重试(最多 10 次)，确保快捷键 100% 稳定响应，不崩溃、不失效。
 * **跨屏截图**：完美支持多显示器环境，支持在不同屏幕之间自由拖拽选区，智能识别当前屏幕上下文。
-* **极速保存**：选区完成后，在区域内**双击鼠标左键**即可瞬间保存并关闭；底层采用原生 DIB 格式写入剪贴板，彻底杜绝“截图后粘贴为空”的问题。
+* **极速保存**：选区完成后，在区域内**双击鼠标左键**即可瞬间保存并关闭；优先使用 Qt 剪贴板通道，睡眠唤醒后比原生 DIB 更稳定，失败时自动降级到 DIB 方式并重试，彻底杜绝”截图后粘贴为空”的问题。
 * **绘图标注**：提供矩形、圆形、箭头、画笔等常用工具。
 * **文字输入**：点击屏幕任意位置即可直接输入文字，支持字号实时调整。
 * **配置记忆**：自动持久化保存您上次使用的画笔颜色和字号，下次截图无缝衔接。
