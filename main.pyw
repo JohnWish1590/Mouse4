@@ -1,7 +1,7 @@
 """
-Mouse4 V90 - 全域崩溃拦截版 (纯净修复版)
-核心：Hard Restart 强力重启 + PIL 剪贴板 + 全局 Exception Hook 异常拦截
-修复：睡眠 pynput ImportError + 工具栏越界遮挡 + 托盘图标偶发消失
+Mouse4 V91 - 睡眠唤醒终极修复版
+核心：1. RegisterHotKey 重试机制 2. Qt 剪贴板优先 3. 移除 keyboard 依赖
+修复：睡眠唤醒后热键注册失败 + 剪贴板崩溃
 """
 
 import sys
@@ -28,11 +28,11 @@ from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject,
                           QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
                          QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
-import keyboard 
 import mss
 # 图像处理库
 from PIL import Image
-import win32clipboard 
+import win32clipboard
+import win32api
 
 # 【微创修复 1】: 仅将 pynput 提前到全局加载，锁定内存，解决睡眠唤醒后的 ImportError
 from pynput import mouse as pynput_mouse
@@ -87,7 +87,7 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V77 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V91 Started (PID: {os.getpid()}) ===")
 
 # ================= 1.5 全局异常拦截网 (黑匣子) =================
 
@@ -235,7 +235,8 @@ def start_mouse_thread():
                 if self.click_count == 2:
                     el = auto.ControlFromCursor()
                     if el.ControlTypeName in ['PaneControl', 'ListControl', 'WindowControl', 'GroupControl']:
-                        keyboard.press_and_release('backspace')
+                        win32api.keybd_event(0x08, 0, 0, 0)
+                        win32api.keybd_event(0x08, 0, 2, 0)
                     self.click_count = 0
             except: self.click_count = 0
 
@@ -583,10 +584,6 @@ class SnippingWindow(QWidget):
 
         except Exception as e:
             config_mgr.log(f"[Clipboard] Error: {e}")
-            try:
-                if 'img_to_save' in dir():
-                    QApplication.clipboard().setPixmap(img_to_save)
-            except: pass
 
     def close_all(self):
         close_all_windows()
@@ -665,6 +662,10 @@ def start_hotkey_listener():
     使用 Win32 RegisterHotKey API 注册全局热键 Ctrl+1。
     相比 keyboard.add_hotkey，原生 API 不会被 PyInstaller 环境、
     窗口焦点、或 UAC 虚拟化影响，且与睡眠唤醒完全兼容。
+
+    自动重试：睡眠唤醒后旧进程刚 os._exit，Windows 还没清理完
+    旧热键就启动了新进程，首次 RegisterHotKey 可能失败。
+    最多重试 10 次(间隔 1s)，等待旧热键释放。
     """
     MOD_CONTROL = 0x0002
     VK_1 = 0x31  # 键盘数字 '1'
@@ -673,12 +674,16 @@ def start_hotkey_listener():
 
     user32 = ctypes.windll.user32
 
-    # 在当前线程注册热键（hWnd=None → 线程关联）
-    if not user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL, VK_1):
-        config_mgr.log("[Hotkey] RegisterHotKey Ctrl+1 FAILED")
+    # 重试注册：旧进程 os._exit 后热键还在系统里挂一会
+    for attempt in range(10):
+        if user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL, VK_1):
+            config_mgr.log(f"[Hotkey] RegisterHotKey Ctrl+1 OK (listening...)")
+            break
+        config_mgr.log(f"[Hotkey] RegisterHotKey attempt {attempt+1}/10 failed, retrying...")
+        time.sleep(1)
+    else:
+        config_mgr.log("[Hotkey] RegisterHotKey Ctrl+1 FAILED after 10 attempts")
         return
-
-    config_mgr.log("[Hotkey] RegisterHotKey Ctrl+1 OK (listening...)")
 
     # 阻塞式消息队列：GetMessageW 在没有消息时让线程休眠
     msg = ctypes.wintypes.MSG()
