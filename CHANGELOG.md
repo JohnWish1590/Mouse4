@@ -2,6 +2,15 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V95.0] - 2026-05-17 (架构加固版 V2 - Mutex/Paste/QApp兜底)
+### Fixed
+- **重启被 Mutex 挡死** (P0): `CloseHandle(h_mutex)` 在先, `Popen` 在后，新进程不再因 Mutex 已存在而退出。V94 的致命回归。
+- **paste 模式被拦截** (P0): `--paste` 分支移到 Mutex 检查之前，右键粘贴不再因单实例保护而静默退出。
+- **看门狗 QApp 未就绪** (P1): `QApplication.quit()` 前增加 `QApplication.instance()` 判断，QApp 未初始化时走 `os._exit()` 兜底。
+- **ctypes.wintypes 隐式依赖** (P2): 增加显式 `import ctypes.wintypes`。
+### Changed
+- 版本号 V94.0 → V95.0
+
 ## [V94.0] - 2026-05-17 (架构加固版 - Architecture Hardening)
 ### Added
 - **单实例保护**: Windows 命名 Mutex (`CreateMutexW`), 防止看门狗重启后新旧进程并存。检测到已有实例时自动退出, 日志记录 `[Mutex] Another instance already running`。

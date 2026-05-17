@@ -1,12 +1,13 @@
 """
-Mouse4 V94 - 架构加固版
-核心：单实例Mutex + RLock防死锁 + 优雅重启 + 热键两阶段
-修复：多进程并存 / 配置保存死锁 / os._exit硬退出 / 信号时序竞态
+Mouse4 V95 - 架构加固版 V2
+核心：Mutex释放 + paste优先 + QApp兜底
+修复：重启被Mutex挡死 / paste模式被拦截 / 看门狗QApp未就绪 / ctypes显式导入
 """
 
 import sys
 import os
 import ctypes
+import ctypes.wintypes
 import datetime
 import threading
 import time
@@ -87,7 +88,11 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V94 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V95 Started (PID: {os.getpid()}) ===")
+
+# 右键粘贴模式：必须在 Mutex 之前处理，因为它需要独立进程
+if len(sys.argv) > 1 and '--paste' in sys.argv:
+    run_paste_mode_safe(sys.argv)
 
 # 单实例保护：Windows 命名 Mutex，防止看门狗重启后新旧进程并存
 SINGLE_INSTANCE_MUTEX = "Mouse4_SingleInstance_JohnWish"
@@ -155,7 +160,15 @@ config = GlobalConfig()
 def restart_program():
     config_mgr.log("[Restart] Triggered - Executing Restart...")
     try:
-        # Popen 直接创建进程(不走 Explorer)，睡眠后 Explorer 可能未就绪
+        global h_mutex
+
+        # 1) 释放 Mutex：让新进程能顺利创建同名 Mutex，避免被单实例保护挡死
+        if h_mutex:
+            ctypes.windll.kernel32.CloseHandle(h_mutex)
+            h_mutex = None
+            config_mgr.log("[Restart] Mutex released for new process")
+
+        # 2) Popen 直接创建新进程(不走 Explorer)，睡眠后 Explorer 可能未就绪
         DETACHED_PROCESS = 0x00000008
         if getattr(sys, 'frozen', False):
             subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
@@ -163,12 +176,17 @@ def restart_program():
             subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])],
                              creationflags=DETACHED_PROCESS)
 
-        config_mgr.log("[Restart] New process launched. Quitting gracefully...")
-        # 优雅退出：让 Qt 做清理(托盘、hook 等)，然后 atexit 写配置
-        QApplication.quit()
+        config_mgr.log("[Restart] New process launched. Exiting...")
+
+        # 3) 优雅退出 vs 硬退出
+        #    如果 QApp 已就绪，quit() 触发 Qt 清理(托盘/hook) + atexit 写配置
+        #    如果 QApp 还未就绪(看门狗在启动阶段触发)，直接 os._exit
+        if QApplication.instance():
+            QApplication.quit()
+        else:
+            os._exit(0)
     except Exception as e:
         config_mgr.log(f"[Restart] Failed: {e}")
-        # 最后的退路：os._exit 不会调 atexit，但进程一定死
         os._exit(1)
 
 def watchdog_thread():
@@ -212,9 +230,6 @@ def run_paste_mode_safe(args):
     except Exception as e:
         config_mgr.log(f"[PasteMode] Error: {e}")
     sys.exit(0)
-
-if len(sys.argv) > 1 and '--paste' in sys.argv:
-    run_paste_mode_safe(sys.argv)
 
 try: ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except: pass
