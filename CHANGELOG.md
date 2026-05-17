@@ -2,13 +2,72 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
-## [V98.0] - 2026-05-17 (三角色重启架构 硬化版 - Hardened)
-### Fixed
-- **timer 兜底不依赖 Qt event loop**: `QTimer.singleShot(3000, ...)` 从看门狗线程调用时绑定到非主线程，没有 Qt event loop，timer 不会触发。改为 `threading.Timer(3.0, lambda: os._exit(0)).start()`，纯 Python 实现，不受 Qt 影响。
-- **Win32 API 64 位 HANDLE 截断风险**: `ctypes` 默认 `restype` 为 `c_int`(32 位)，`CreateMutexW`/`OpenProcess` 返回的 HANDLE 在 64 位系统上可能被截断。集中声明显式 `argtypes`/`restype`，使用 `ctypes.wintypes.HANDLE`(指针宽度)。
-### Changed
-- 版本号 V97.0 → V98.0
-- 引入 `kernel32` 本地引用，统一管理 Win32 API 调用
+## [V99.0] - 2026-05-17 (正式版 - Official Release)
+
+V77→V99 睡眠唤醒问题修复全历程。V90 之前的原生热键退化导致了一系列睡眠唤醒崩溃，经过 codex 深度 code review 和 6 轮迭代，最终以三角色重启架构收口。
+
+### V77 原始问题 (2026-02-26)
+- Watchdog 检测到睡眠 → Hard Restart → 新进程启动后热键失效、剪贴板崩溃
+- 黄色/红色双弹窗，需手动重启才能恢复
+
+### V91 修复链
+- **RegisterHotKey 重试**: 旧进程热键未释放时自动重试 10 次(间隔 1s)
+- **Qt 剪贴板优先**: `QApplication.clipboard().setPixmap()` 优先，DIB 方式 3 次重试兜底
+- **移除 keyboard 依赖**: `press_and_release('backspace')` → `win32api.keybd_event`
+
+### V92 热键线程提前
+- 热键线程在 `QApplication(sys.argv)` 之前启动，不等 QApp
+- 否则睡眠恢复后 QApp 初始化挂起 → 热键线程永不启动
+
+### V93 Popen 替代 startfile
+- `os.startfile` 走 Explorer，睡眠后 Explorer 未就绪 → 新进程静默消失
+- `subprocess.Popen` + `DETACHED_PROCESS` 直接调用 NT 进程创建 API
+
+### V94 架构加固 (引入单实例 Mutex)
+- `threading.Lock` → `threading.RLock` (set() 调 _save_sync() 不卡死)
+- Windows 命名 Mutex 防多进程并存
+- `os._exit(0)` → `QApplication.quit()` (Qt 清理托盘/hook)
+
+### V95 问题暴露 (codex review)
+- **P0 - 重启被 Mutex 挡死**: 旧进程持 Mutex，新进程 CreateMutex → ERROR_ALREADY_EXISTS → exit
+- **P0 - paste 被拦截**: `Mouse4.exe --paste "%V"` 先撞 Mutex 后 exit，右键粘贴全废
+- 修复: `CloseHandle(h_mutex)` → `Popen` → `quit()`，但本质上是拆掉安全带重启
+
+### V96 问题暴露 (codex review)
+- **P0 - paste NameError**: `run_paste_mode_safe()` 调用在函数定义之前，运行时崩
+- codex 提出三角色重启架构方案
+
+### V97 三角色重启架构 (codex 方案落地)
+- **普通模式**: CreateMutex → 拿不到就退出 (单实例保护)
+- **paste 模式**: 绕过 Mutex，存剪贴板到文件 → exit (短命工具进程)
+- **restart-wait 模式**: 绕过 Mutex，`OpenProcess` + `WaitForSingleObject(10s)` 等旧进程死透
+  → 启动新主实例 → exit
+- 旧进程持 Mutex 到死，不提前释放。OS 自然释放 → 新进程自然取得。
+
+### V98 硬化 (codex review)
+- `QTimer.singleShot` → `threading.Timer` (看门狗线程无 Qt event loop，timer 不触发)
+- Win32 API 显式 `argtypes`/`restype` (64 位 HANDLE 不被 `c_int` 截断)
+
+### V99 正式版 (codex final)
+- `threading.Timer` 设为 daemon (非 daemon 阻塞进程退出，优雅路径也被拖 3 秒强杀)
+- 所有已知问题已收口，codex 终审通过
+
+### 架构总览 (V99)
+```
+启动:
+  1. ConfigManager
+  2. --paste?       → run_paste_mode_safe (不碰 Mutex)
+     --restart-wait? → run_restart_wait (不碰 Mutex)
+  3. CreateMutex    → 已有实例则退出 (单实例保护)
+  4. 热键 Phase 1 (RegisterHotKey 重试 ×10)
+  5. 看门狗线程 / 鼠标线程
+  6. QApp 初始化 → 信号连接 → hotkey_ready.set()
+  7. 热键 Phase 2 (GetMessageW 消息循环)
+
+重启:
+  旧进程 ─Popen(--restart-wait pid)─→ helper ─Wait(10s)─→ 新主进程
+           └─app.quit()+3s daemon timer    └─旧进程死透,Mutex自然释放─┘
+```
 
 ## [V97.0] - 2026-05-17 (三角色重启架构 - Three-Role Restart)
 ### Added

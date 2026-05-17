@@ -1,7 +1,7 @@
 """
-Mouse4 V98 - 三角色重启架构 (硬化版)
-核心：threading.Timer 兜底 + Win32 API 显式原型声明
-硬化：timer 不依赖 Qt event loop + 64 位 HANDLE 不被 c_int 截断
+Mouse4 V99 - 三角色重启架构 (正式版)
+核心：restart-wait helper + threading.Timer daemon + Win32 API 原型硬化
+历经 V77→V99, 22 个版本迭代, 睡眠唤醒问题最终收口
 """
 
 import sys
@@ -100,7 +100,7 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V98 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V99 Started (PID: {os.getpid()}) ===")
 
 # ================= 1.5 特殊模式 (必须在 Mutex 之前) =================
 # --paste:        右键粘贴, 短命工具进程, 绕过单实例
@@ -253,7 +253,9 @@ def restart_program():
         # 优雅退出: 3 秒 timer 兜底, 防止 event loop 卡死
         app = QApplication.instance()
         if app:
-            threading.Timer(3.0, lambda: os._exit(0)).start()
+            t = threading.Timer(3.0, lambda: os._exit(0))
+            t.daemon = True
+            t.start()
             app.quit()
         else:
             os._exit(0)
