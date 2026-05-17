@@ -1,7 +1,7 @@
 """
-Mouse4 V92 - 睡眠唤醒终极修复版 V2
-核心：热键线程提前启动(不等QApp) + RegisterHotKey 重试 + Qt 剪贴板优先
-修复：睡眠后 QApplication 初始化挂起导致热键线程永不启动
+Mouse4 V93 - 睡眠唤醒终极修复版 V3
+核心：subprocess.Popen 替代 os.startfile + 热键线程提前启动 + Qt 剪贴板优先
+修复：os.startfile 走 Explorer 在睡眠恢复后静默失败导致新进程不启动
 """
 
 import sys
@@ -87,7 +87,7 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V92 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V93 Started (PID: {os.getpid()}) ===")
 
 # ================= 1.5 全局异常拦截网 (黑匣子) =================
 
@@ -147,13 +147,15 @@ config = GlobalConfig()
 def restart_program():
     config_mgr.log("[Restart] Triggered - Executing Hard Restart...")
     try:
+        # 使用 Popen 直接创建进程(不走 Explorer)，睡眠恢复后 Explorer 可能未就绪
+        # DETACHED_PROCESS 使新进程独立于控制台
+        DETACHED_PROCESS = 0x00000008
         if getattr(sys, 'frozen', False):
-            os.startfile(sys.executable)
+            subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
         else:
-            import win32api
-            win32api.ShellExecute(0, 'open', sys.executable, sys.argv[0], '', 1)
-        
-        config_mgr.log("[Restart] New process requested via Shell. Exiting now.")
+            subprocess.Popen([sys.executable, sys.argv[0]], creationflags=DETACHED_PROCESS)
+
+        config_mgr.log("[Restart] New process requested. Exiting now.")
         os._exit(0)
     except Exception as e:
         config_mgr.log(f"[Restart] Failed: {e}")

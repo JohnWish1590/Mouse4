@@ -2,6 +2,13 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V93.0] - 2026-05-17 (睡眠唤醒终极修复 V3 - Popen Not Startfile)
+### Fixed
+- **看门狗重启后新进程不启动**: `os.startfile` 通过 Windows Explorer 启动进程，睡眠恢复后 Explorer 可能未就绪，导致新进程静默消失。改用 `subprocess.Popen` + `DETACHED_PROCESS` 直接调用系统进程创建 API，不依赖 Explorer，可靠性显著提升。
+### Changed
+- 版本号 V92.0 → V93.0
+- `restart_program`: `os.startfile` → `subprocess.Popen`
+
 ## [V92.0] - 2026-05-16 (睡眠唤醒终极修复 V2 - Hotkey Thread First)
 ### Fixed
 - **热键线程永不启动**: V91 的热键线程在 `QApplication(sys.argv)` 之后启动，睡眠恢复后 QApplication 初始化可能挂起，导致线程根本跑不起来。现在热键线程提到最前面(第一行)，不等 QApp，确保无论系统状态如何都能启动。
