@@ -1,7 +1,7 @@
 """
-Mouse4 V99 - 三角色重启架构 (正式版)
-核心：restart-wait helper + threading.Timer daemon + Win32 API 原型硬化
-历经 V77→V99, 22 个版本迭代, 睡眠唤醒问题最终收口
+Mouse4 V100 - 睡眠唤醒重启可观测版
+核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
+修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
 """
 
 import sys
@@ -100,7 +100,11 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V99 Started (PID: {os.getpid()}) ===")
+_startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
+config_mgr.log(
+    f"=== Mouse4 V100 Started role={_startup_role} "
+    f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
+)
 
 # ================= 1.5 特殊模式 (必须在 Mutex 之前) =================
 # --paste:        右键粘贴, 短命工具进程, 绕过单实例
@@ -148,14 +152,36 @@ def run_restart_wait(args):
     else:
         config_mgr.log(f"[RestartWait] Old PID {old_pid} already gone; launching.")
 
-    # 启动新主实例 (此时旧进程已死, Mutex 已被 OS 释放)
-    DETACHED_PROCESS = 0x00000008
+    # 睡眠唤醒后系统服务/驱动/用户会话可能仍在恢复，稍等一会再拉主进程。
+    settle_seconds = 3
+    config_mgr.log(f"[RestartWait] Settling {settle_seconds}s before launching main...")
+    time.sleep(settle_seconds)
+
+    # 启动新主实例 (此时旧进程通常已死, Mutex 已被 OS 释放)
     if getattr(sys, 'frozen', False):
-        subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
+        cmd = [sys.executable]
+        launch_cwd = os.path.dirname(sys.executable)
     else:
-        subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])],
-                         creationflags=DETACHED_PROCESS)
-    config_mgr.log("[RestartWait] New main instance launched. Helper exiting.")
+        script_path = os.path.abspath(sys.argv[0])
+        cmd = [sys.executable, script_path]
+        launch_cwd = os.path.dirname(script_path)
+
+    DETACHED_PROCESS = 0x00000008
+    for attempt in range(1, 4):
+        try:
+            proc = subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd)
+            config_mgr.log(f"[RestartWait] Launch attempt {attempt}/3 requested (new PID: {proc.pid}, cwd={launch_cwd})")
+            time.sleep(2)
+            code = proc.poll()
+            if code is None:
+                config_mgr.log(f"[RestartWait] New main PID {proc.pid} still alive after 2s. Helper exiting.")
+                sys.exit(0)
+            config_mgr.log(f"[RestartWait] New main PID {proc.pid} exited early with code {code}; retrying...")
+        except Exception as e:
+            config_mgr.log(f"[RestartWait] Launch attempt {attempt}/3 failed: {e}")
+        time.sleep(2)
+
+    config_mgr.log("[RestartWait] All launch attempts failed or exited early. Helper exiting.")
     sys.exit(0)
 
 if "--paste" in sys.argv:
@@ -240,14 +266,16 @@ def restart_program():
     try:
         DETACHED_PROCESS = 0x00000008
         if getattr(sys, 'frozen', False):
-            subprocess.Popen([sys.executable, '--restart-wait', str(old_pid)],
-                             creationflags=DETACHED_PROCESS)
+            helper_cmd = [sys.executable, '--restart-wait', str(old_pid)]
+            launch_cwd = os.path.dirname(sys.executable)
         else:
-            subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]),
-                              '--restart-wait', str(old_pid)],
-                             creationflags=DETACHED_PROCESS)
+            script_path = os.path.abspath(sys.argv[0])
+            helper_cmd = [sys.executable, script_path, '--restart-wait', str(old_pid)]
+            launch_cwd = os.path.dirname(script_path)
 
-        config_mgr.log("[Restart] Helper launched. Exiting gracefully...")
+        helper_proc = subprocess.Popen(helper_cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd)
+
+        config_mgr.log(f"[Restart] Helper launched (PID: {helper_proc.pid}, cwd={launch_cwd}). Exiting gracefully...")
         # 不手动释放 Mutex! 由 OS 在进程退出时自然释放。
 
         # 优雅退出: 3 秒 timer 兜底, 防止 event loop 卡死

@@ -2,6 +2,19 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V100.0] - 2026-05-17 (可观测重启版 - Observable Restart)
+### Fixed
+- **V99 重启黑箱**: V99 的 helper 声称 "New main instance launched" 但新主进程从未留下启动日志。helper 立即退出，旧进程也已不在，程序彻底消失。
+- **黄色/红色弹窗**: 新主进程在系统未完全恢复时启动，Qt 初始化/显卡驱动等失败 → `global_exception_handler` 红叉 + `thread_exception_handler` 黄叹号，进程瞬间崩溃。
+### Added
+- **角色标注启动日志**: 每条 `=== Mouse4 V100 Started ===` 现在标明 `role=main` / `role=restart-wait` / `role=paste`，一眼看出哪个角色在跑。
+- **helper 沉降延迟**: helper 等旧进程退出后额外等待 3 秒，让睡眠唤醒后的系统服务/驱动/用户会话充分恢复再拉主进程。
+- **helper 启动重试**: Popen 新主进程后等 2 秒确认进程存活。如果 2 秒内退出则自动重试，最多 3 次。
+- **显式 cwd 设置**: helper 启动主进程时指定 `cwd` 为 exe 所在目录，防止睡眠后工作目录异常导致资源加载失败。
+### Changed
+- 版本号 V99.0 → V100.0
+- 现在如果再次失败，日志会直接记录 `New main PID xxxx exited early with code ...` 和重试次数，不再黑箱。
+
 ## [V99.0] - 2026-05-17 (正式版 - Official Release)
 
 V77→V99 睡眠唤醒问题修复全历程。V90 之前的原生热键退化导致了一系列睡眠唤醒崩溃，经过 codex 深度 code review 和 6 轮迭代，最终以三角色重启架构收口。
