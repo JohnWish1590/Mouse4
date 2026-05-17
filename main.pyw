@@ -1,7 +1,7 @@
 """
-Mouse4 V95 - 架构加固版 V2
-核心：Mutex释放 + paste优先 + QApp兜底
-修复：重启被Mutex挡死 / paste模式被拦截 / 看门狗QApp未就绪 / ctypes显式导入
+Mouse4 V96 - 架构加固版 V3
+核心：函数定义位置修复 + Mutex释放 + paste优先
+修复：paste模式NameError (P0) / 重启被Mutex挡死 / QApp兜底 / ctypes显式导入
 """
 
 import sys
@@ -88,9 +88,32 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V95 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V96 Started (PID: {os.getpid()}) ===")
 
 # 右键粘贴模式：必须在 Mutex 之前处理，因为它需要独立进程
+def run_paste_mode_safe(args):
+    """轻量进程：从剪贴板保存截图到目标文件夹"""
+    try:
+        target_folder = os.getcwd()
+        if len(args) > 2 and '--paste' in args:
+            try:
+                idx = args.index('--paste')
+                if idx + 1 < len(args):
+                    target_folder = " ".join(args[idx+1:]).strip('"').strip()
+            except: pass
+
+        if not target_folder or not os.path.exists(target_folder):
+             target_folder = os.path.join(os.path.expanduser("~"), "Desktop")
+
+        from PIL import ImageGrab
+        img = ImageGrab.grabclipboard()
+        if img:
+            fname = f"Screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            img.save(os.path.join(target_folder, fname), "PNG")
+    except Exception as e:
+        config_mgr.log(f"[PasteMode] Error: {e}")
+    sys.exit(0)
+
 if len(sys.argv) > 1 and '--paste' in sys.argv:
     run_paste_mode_safe(sys.argv)
 
@@ -209,27 +232,6 @@ def resource_path(relative_path):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-def run_paste_mode_safe(args):
-    try:
-        target_folder = os.getcwd()
-        if len(args) > 2 and '--paste' in args:
-            try:
-                idx = args.index('--paste')
-                if idx + 1 < len(args):
-                    target_folder = " ".join(args[idx+1:]).strip('"').strip()
-            except: pass
-        
-        if not target_folder or not os.path.exists(target_folder):
-             target_folder = os.path.join(os.path.expanduser("~"), "Desktop")
-
-        from PIL import ImageGrab
-        img = ImageGrab.grabclipboard()
-        if img:
-            fname = f"Screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-            img.save(os.path.join(target_folder, fname), "PNG")
-    except Exception as e:
-        config_mgr.log(f"[PasteMode] Error: {e}")
-    sys.exit(0)
 
 try: ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
 except: pass

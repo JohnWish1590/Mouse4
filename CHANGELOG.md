@@ -2,6 +2,13 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V96.0] - 2026-05-17 (架构加固版 V3 - paste NameError修复)
+### Fixed
+- **paste 模式必炸 NameError** (P0): `run_paste_mode_safe()` 函数定义在调用之后才出现，Python 执行到调用行时函数名还不存在。将函数定义上移到 paste 判断语句**之前**，消除运行时崩溃。
+- 重启 Mutex 竞态窗口已缩小：`CloseHandle` → `Popen` 时序更紧凑。
+### Changed
+- 版本号 V95.0 → V96.0
+
 ## [V95.0] - 2026-05-17 (架构加固版 V2 - Mutex/Paste/QApp兜底)
 ### Fixed
 - **重启被 Mutex 挡死** (P0): `CloseHandle(h_mutex)` 在先, `Popen` 在后，新进程不再因 Mutex 已存在而退出。V94 的致命回归。
