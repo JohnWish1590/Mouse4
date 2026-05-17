@@ -1,7 +1,7 @@
 """
-Mouse4 V93 - 睡眠唤醒终极修复版 V3
-核心：subprocess.Popen 替代 os.startfile + 热键线程提前启动 + Qt 剪贴板优先
-修复：os.startfile 走 Explorer 在睡眠恢复后静默失败导致新进程不启动
+Mouse4 V94 - 架构加固版
+核心：单实例Mutex + RLock防死锁 + 优雅重启 + 热键两阶段
+修复：多进程并存 / 配置保存死锁 / os._exit硬退出 / 信号时序竞态
 """
 
 import sys
@@ -48,7 +48,7 @@ class ConfigManager:
         self.config_file = self.config_dir / 'config.json'
         self.log_file = self.config_dir / 'debug.log'
         self._cache = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self._load()
         atexit.register(self._save_sync)
@@ -87,7 +87,15 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V93 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V94 Started (PID: {os.getpid()}) ===")
+
+# 单实例保护：Windows 命名 Mutex，防止看门狗重启后新旧进程并存
+SINGLE_INSTANCE_MUTEX = "Mouse4_SingleInstance_JohnWish"
+h_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    ctypes.windll.kernel32.CloseHandle(h_mutex)
+    config_mgr.log("[Mutex] Another instance already running. Exiting.")
+    sys.exit(0)
 
 # ================= 1.5 全局异常拦截网 (黑匣子) =================
 
@@ -145,20 +153,22 @@ config = GlobalConfig()
 # ================= 3. 强力重启与看门狗 =================
 
 def restart_program():
-    config_mgr.log("[Restart] Triggered - Executing Hard Restart...")
+    config_mgr.log("[Restart] Triggered - Executing Restart...")
     try:
-        # 使用 Popen 直接创建进程(不走 Explorer)，睡眠恢复后 Explorer 可能未就绪
-        # DETACHED_PROCESS 使新进程独立于控制台
+        # Popen 直接创建进程(不走 Explorer)，睡眠后 Explorer 可能未就绪
         DETACHED_PROCESS = 0x00000008
         if getattr(sys, 'frozen', False):
             subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
         else:
-            subprocess.Popen([sys.executable, sys.argv[0]], creationflags=DETACHED_PROCESS)
+            subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])],
+                             creationflags=DETACHED_PROCESS)
 
-        config_mgr.log("[Restart] New process requested. Exiting now.")
-        os._exit(0)
+        config_mgr.log("[Restart] New process launched. Quitting gracefully...")
+        # 优雅退出：让 Qt 做清理(托盘、hook 等)，然后 atexit 写配置
+        QApplication.quit()
     except Exception as e:
         config_mgr.log(f"[Restart] Failed: {e}")
+        # 最后的退路：os._exit 不会调 atexit，但进程一定死
         os._exit(1)
 
 def watchdog_thread():
@@ -658,16 +668,16 @@ def setup_tray(app):
     return tray_icon
 
 # ================= 7. 原生热键 (RegisterHotKey) =================
+# 热键两阶段设计:
+#   Phase 1: RegisterHotKey (不依赖 QApp, 可提前执行)
+#   Phase 2: GetMessageW 消息循环 (需要 QApp 就绪后才 emit 信号)
+# 中间用 hotkey_ready event 同步, 避免 QApp 未初始化就 emit signal
+
+hotkey_ready = threading.Event()
 
 def start_hotkey_listener():
     """
-    使用 Win32 RegisterHotKey API 注册全局热键 Ctrl+1。
-    相比 keyboard.add_hotkey，原生 API 不会被 PyInstaller 环境、
-    窗口焦点、或 UAC 虚拟化影响，且与睡眠唤醒完全兼容。
-
-    自动重试：睡眠唤醒后旧进程刚 os._exit，Windows 还没清理完
-    旧热键就启动了新进程，首次 RegisterHotKey 可能失败。
-    最多重试 10 次(间隔 1s)，等待旧热键释放。
+    Phase 1: 注册热键 (可不依赖 QApp)
     """
     MOD_CONTROL = 0x0002
     VK_1 = 0x31  # 键盘数字 '1'
@@ -676,7 +686,7 @@ def start_hotkey_listener():
 
     user32 = ctypes.windll.user32
 
-    # 重试注册：旧进程 os._exit 后热键还在系统里挂一会
+    # 重试注册：旧进程刚退出, 热键还没清理干净
     for attempt in range(10):
         if user32.RegisterHotKey(None, HOTKEY_ID, MOD_CONTROL, VK_1):
             config_mgr.log(f"[Hotkey] RegisterHotKey Ctrl+1 OK (listening...)")
@@ -687,7 +697,14 @@ def start_hotkey_listener():
         config_mgr.log("[Hotkey] RegisterHotKey Ctrl+1 FAILED after 10 attempts")
         return
 
-    # 阻塞式消息队列：GetMessageW 在没有消息时让线程休眠
+    """
+    Phase 2: 等待 QApp 就绪后再进入消息循环
+    (emit 信号需要 QApplication 已创建且 signal 已 connect)
+    """
+    config_mgr.log("[Hotkey] Waiting for QApp to be ready...")
+    hotkey_ready.wait()
+
+    config_mgr.log("[Hotkey] QApp ready, entering message loop...")
     msg = ctypes.wintypes.MSG()
     while True:
         ret = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
@@ -719,5 +736,8 @@ if __name__ == '__main__':
 
     comm.trigger_screenshot.connect(do_show_windows)
     comm.show_toast.connect(lambda x,y: SuccessToast("Saved!").show_anim(x,y))
+
+    # 通知热键线程：QApp 就绪，可以开始 emit 信号了
+    hotkey_ready.set()
 
     sys.exit(app.exec())

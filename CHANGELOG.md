@@ -2,6 +2,18 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V94.0] - 2026-05-17 (架构加固版 - Architecture Hardening)
+### Added
+- **单实例保护**: Windows 命名 Mutex (`CreateMutexW`), 防止看门狗重启后新旧进程并存。检测到已有实例时自动退出, 日志记录 `[Mutex] Another instance already running`。
+- **热键两阶段设计**: Phase 1 注册热键(不依赖 QApp, 提前执行), Phase 2 消息循环(等 QApp 就绪信号再 emit)。通过 `threading.Event()` 同步, 彻底解决信号时序竞态。
+### Fixed
+- **配置保存死锁**: `threading.Lock` → `threading.RLock`, `set()` 调 `_save_sync()` 时同一线程可重入, 不再卡死。
+- **硬退出不清理**: `os._exit(0)` → `QApplication.quit()`, 让 Qt 有机会清理托盘图标和系统 hook, atexit 写入配置, 进程自然退出。
+- **源码模式重启路径**: `sys.argv[0]` 改为 `os.path.abspath(sys.argv[0])`, 避免相对路径找不到脚本。
+### Changed
+- 版本号 V93.0 → V94.0
+- `restart_program`: 错误时 `os._exit(1)` 仅作为最后的退路
+
 ## [V93.0] - 2026-05-17 (睡眠唤醒终极修复 V3 - Popen Not Startfile)
 ### Fixed
 - **看门狗重启后新进程不启动**: `os.startfile` 通过 Windows Explorer 启动进程，睡眠恢复后 Explorer 可能未就绪，导致新进程静默消失。改用 `subprocess.Popen` + `DETACHED_PROCESS` 直接调用系统进程创建 API，不依赖 Explorer，可靠性显著提升。
