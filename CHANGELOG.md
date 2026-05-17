@@ -2,6 +2,19 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V97.0] - 2026-05-17 (三角色重启架构 - Three-Role Restart)
+### Added
+- **三角色重启架构**: 引入 `--restart-wait <pid>` helper 进程模式。重启时旧主进程不释放 Mutex，而是启动 helper 等自己死透，helper 再用 Win32 API (`OpenProcess` + `WaitForSingleObject`) 等旧 PID 退出，然后才启动新主实例。全过程 Mutex 由 OS 自然释放，无竞态窗口。
+- **`run_restart_wait`**: helper 进程函数，绕过单实例保护。等旧进程退出（10 秒超时兜底），然后启动新主实例，自己退出。
+- **重启 3 秒 timer 兜底**: `QTimer.singleShot(3000, os._exit)` 在 `app.quit()` 之上增加强制退出，防止 event loop 卡死后进程不退出。
+### Fixed
+- **重启不再提前释放 Mutex**: 删除 V95/V96 的 `CloseHandle(h_mutex)` 重启路径，改由 OS 在旧进程死亡时自然释放。消除“锁已空但进程还活着”的竞态窗口。
+- **特殊模式统一前置**: `--paste` 和 `--restart-wait` 都在 Mutex 创建之前处理，不碰单实例保护，互不干扰。
+- **日志覆盖**: helper 的每个决策点（等到了旧进程退出 / 超时 / 旧进程已不在）都有独立日志。
+### Changed
+- 版本号 V96.0 → V97.0
+- 启动顺序: `ConfigManager` → 特殊模式(paste/restart-wait) → Mutex → 主程序
+
 ## [V96.0] - 2026-05-17 (架构加固版 V3 - paste NameError修复)
 ### Fixed
 - **paste 模式必炸 NameError** (P0): `run_paste_mode_safe()` 函数定义在调用之后才出现，Python 执行到调用行时函数名还不存在。将函数定义上移到 paste 判断语句**之前**，消除运行时崩溃。

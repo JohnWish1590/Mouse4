@@ -1,7 +1,7 @@
 """
-Mouse4 V96 - 架构加固版 V3
-核心：函数定义位置修复 + Mutex释放 + paste优先
-修复：paste模式NameError (P0) / 重启被Mutex挡死 / QApp兜底 / ctypes显式导入
+Mouse4 V97 - 三角色重启架构
+核心：restart-wait helper 进程 + 普通/paste/restart 三模式互不干扰
+修复：不再提前释放Mutex，旧进程持锁到死透，新进程自然取得
 """
 
 import sys
@@ -88,9 +88,12 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V96 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V97 Started (PID: {os.getpid()}) ===")
 
-# 右键粘贴模式：必须在 Mutex 之前处理，因为它需要独立进程
+# ================= 1.5 特殊模式 (必须在 Mutex 之前) =================
+# --paste:        右键粘贴, 短命工具进程, 绕过单实例
+# --restart-wait: 重启等待器, 等旧进程死透再启动新主实例, 绕过单实例
+
 def run_paste_mode_safe(args):
     """轻量进程：从剪贴板保存截图到目标文件夹"""
     try:
@@ -101,10 +104,8 @@ def run_paste_mode_safe(args):
                 if idx + 1 < len(args):
                     target_folder = " ".join(args[idx+1:]).strip('"').strip()
             except: pass
-
         if not target_folder or not os.path.exists(target_folder):
              target_folder = os.path.join(os.path.expanduser("~"), "Desktop")
-
         from PIL import ImageGrab
         img = ImageGrab.grabclipboard()
         if img:
@@ -114,10 +115,45 @@ def run_paste_mode_safe(args):
         config_mgr.log(f"[PasteMode] Error: {e}")
     sys.exit(0)
 
-if len(sys.argv) > 1 and '--paste' in sys.argv:
-    run_paste_mode_safe(sys.argv)
+def run_restart_wait(args):
+    """重启等待器：等旧进程完全退出后，再启动新主实例
+    旧进程在 restart_program() 中 Popen 此 helper 后即退出。
+    Helper 用 Win32 API 等旧 PID signal，超时 10 秒后直接启动。
+    """
+    idx = args.index('--restart-wait')
+    old_pid = int(args[idx + 1])
+    config_mgr.log(f"[RestartWait] Monitoring old PID {old_pid}...")
 
-# 单实例保护：Windows 命名 Mutex，防止看门狗重启后新旧进程并存
+    SYNCHRONIZE = 0x00100000
+    handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, old_pid)
+    if handle:
+        ret = ctypes.windll.kernel32.WaitForSingleObject(handle, 10000)
+        ctypes.windll.kernel32.CloseHandle(handle)
+        if ret == 0:  # WAIT_OBJECT_0 = old process exited
+            config_mgr.log(f"[RestartWait] Old PID {old_pid} exited cleanly.")
+        else:  # WAIT_TIMEOUT
+            config_mgr.log(f"[RestartWait] Old PID {old_pid} still alive after 10s; launching anyway.")
+    else:
+        config_mgr.log(f"[RestartWait] Old PID {old_pid} already gone; launching.")
+
+    # 启动新主实例 (此时旧进程已死, Mutex 已被 OS 释放)
+    DETACHED_PROCESS = 0x00000008
+    if getattr(sys, 'frozen', False):
+        subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
+    else:
+        subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])],
+                         creationflags=DETACHED_PROCESS)
+    config_mgr.log("[RestartWait] New main instance launched. Helper exiting.")
+    sys.exit(0)
+
+if "--paste" in sys.argv:
+    run_paste_mode_safe(sys.argv)
+if "--restart-wait" in sys.argv:
+    run_restart_wait(sys.argv)
+
+# ================= 1.6 单实例保护 =================
+# 命名 Mutex: 确保同时只有一个主实例运行
+# --paste / --restart-wait 已在上面绕过, 不碰 Mutex
 SINGLE_INSTANCE_MUTEX = "Mouse4_SingleInstance_JohnWish"
 h_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
 if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
@@ -125,7 +161,7 @@ if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
     config_mgr.log("[Mutex] Another instance already running. Exiting.")
     sys.exit(0)
 
-# ================= 1.5 全局异常拦截网 (黑匣子) =================
+# ================= 1.7 全局异常拦截网 (黑匣子) =================
 
 def global_exception_handler(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -178,34 +214,35 @@ class GlobalConfig:
 
 config = GlobalConfig()
 
-# ================= 3. 强力重启与看门狗 =================
+# ================= 3. 三角色重启 =================
+# 重启流程:
+#   旧主进程 ─Popen(helper)─→ helper ─Wait(10s)─→ 新主进程
+#                └─quit()+timer──┘                └─CreateMutex OK
+# 旧进程持 Mutex 到死透, 不提前释放。
+# helper 绕过 Mutex, 等旧进程退出后启动新主实例。
 
 def restart_program():
-    config_mgr.log("[Restart] Triggered - Executing Restart...")
+    """旧主进程：启动 restart-wait helper, 然后优雅退出"""
+    old_pid = os.getpid()
+    config_mgr.log(f"[Restart] Triggered. Launching restart-wait helper (old PID: {old_pid})...")
     try:
-        global h_mutex
-
-        # 1) 释放 Mutex：让新进程能顺利创建同名 Mutex，避免被单实例保护挡死
-        if h_mutex:
-            ctypes.windll.kernel32.CloseHandle(h_mutex)
-            h_mutex = None
-            config_mgr.log("[Restart] Mutex released for new process")
-
-        # 2) Popen 直接创建新进程(不走 Explorer)，睡眠后 Explorer 可能未就绪
         DETACHED_PROCESS = 0x00000008
         if getattr(sys, 'frozen', False):
-            subprocess.Popen([sys.executable], creationflags=DETACHED_PROCESS)
+            subprocess.Popen([sys.executable, '--restart-wait', str(old_pid)],
+                             creationflags=DETACHED_PROCESS)
         else:
-            subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0])],
+            subprocess.Popen([sys.executable, os.path.abspath(sys.argv[0]),
+                              '--restart-wait', str(old_pid)],
                              creationflags=DETACHED_PROCESS)
 
-        config_mgr.log("[Restart] New process launched. Exiting...")
+        config_mgr.log("[Restart] Helper launched. Exiting gracefully...")
+        # 不手动释放 Mutex! 由 OS 在进程退出时自然释放。
 
-        # 3) 优雅退出 vs 硬退出
-        #    如果 QApp 已就绪，quit() 触发 Qt 清理(托盘/hook) + atexit 写配置
-        #    如果 QApp 还未就绪(看门狗在启动阶段触发)，直接 os._exit
-        if QApplication.instance():
-            QApplication.quit()
+        # 优雅退出: 3 秒 timer 兜底, 防止 event loop 卡死
+        app = QApplication.instance()
+        if app:
+            QTimer.singleShot(3000, lambda: os._exit(0))
+            app.quit()
         else:
             os._exit(0)
     except Exception as e:

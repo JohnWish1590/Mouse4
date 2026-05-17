@@ -3,7 +3,7 @@
 一个简单、纯粹的 Windows 鼠标增强程序。它只有两个核心功能：双击返回 和 截图。
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-V96.0-green.svg" alt="Version V96.0">
+  <img src="https://img.shields.io/badge/version-V97.0-green.svg" alt="Version V97.0">
   <img src="https://img.shields.io/badge/platform-Windows-blue.svg" alt="Platform Windows">
   <img src="https://img.shields.io/badge/license-MIT-orange.svg" alt="License MIT">
 </p>
