@@ -2,6 +2,14 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V98.0] - 2026-05-17 (三角色重启架构 硬化版 - Hardened)
+### Fixed
+- **timer 兜底不依赖 Qt event loop**: `QTimer.singleShot(3000, ...)` 从看门狗线程调用时绑定到非主线程，没有 Qt event loop，timer 不会触发。改为 `threading.Timer(3.0, lambda: os._exit(0)).start()`，纯 Python 实现，不受 Qt 影响。
+- **Win32 API 64 位 HANDLE 截断风险**: `ctypes` 默认 `restype` 为 `c_int`(32 位)，`CreateMutexW`/`OpenProcess` 返回的 HANDLE 在 64 位系统上可能被截断。集中声明显式 `argtypes`/`restype`，使用 `ctypes.wintypes.HANDLE`(指针宽度)。
+### Changed
+- 版本号 V97.0 → V98.0
+- 引入 `kernel32` 本地引用，统一管理 Win32 API 调用
+
 ## [V97.0] - 2026-05-17 (三角色重启架构 - Three-Role Restart)
 ### Added
 - **三角色重启架构**: 引入 `--restart-wait <pid>` helper 进程模式。重启时旧主进程不释放 Mutex，而是启动 helper 等自己死透，helper 再用 Win32 API (`OpenProcess` + `WaitForSingleObject`) 等旧 PID 退出，然后才启动新主实例。全过程 Mutex 由 OS 自然释放，无竞态窗口。

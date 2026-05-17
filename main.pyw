@@ -1,7 +1,7 @@
 """
-Mouse4 V97 - 三角色重启架构
-核心：restart-wait helper 进程 + 普通/paste/restart 三模式互不干扰
-修复：不再提前释放Mutex，旧进程持锁到死透，新进程自然取得
+Mouse4 V98 - 三角色重启架构 (硬化版)
+核心：threading.Timer 兜底 + Win32 API 显式原型声明
+硬化：timer 不依赖 Qt event loop + 64 位 HANDLE 不被 c_int 截断
 """
 
 import sys
@@ -38,7 +38,19 @@ import win32api
 # 【微创修复 1】: 仅将 pynput 提前到全局加载，锁定内存，解决睡眠唤醒后的 ImportError
 from pynput import mouse as pynput_mouse
 
-# ================= 0. 启动缓冲 =================
+# ================= 0. Win32 API 原型声明 =================
+# 显式设置 argtypes/restype, 防止 64 位 HANDLE 被 ctypes 默认 c_int 截断
+kernel32 = ctypes.windll.kernel32
+kernel32.CreateMutexW.restype = ctypes.wintypes.HANDLE
+kernel32.CreateMutexW.argtypes = [ctypes.wintypes.LPVOID, ctypes.wintypes.BOOL, ctypes.wintypes.LPCWSTR]
+kernel32.OpenProcess.restype = ctypes.wintypes.HANDLE
+kernel32.OpenProcess.argtypes = [ctypes.wintypes.DWORD, ctypes.wintypes.BOOL, ctypes.wintypes.DWORD]
+kernel32.WaitForSingleObject.restype = ctypes.wintypes.DWORD
+kernel32.WaitForSingleObject.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes.DWORD]
+kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
+kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
+
+# ================= 0.5 启动缓冲 =================
 time.sleep(0.3)
 
 # ================= 1. 配置管理与日志 =================
@@ -88,7 +100,7 @@ class ConfigManager:
     def get_int(self, key, default=0): return int(self.get(key, default))
 
 config_mgr = ConfigManager()
-config_mgr.log(f"=== Mouse4 V97 Started (PID: {os.getpid()}) ===")
+config_mgr.log(f"=== Mouse4 V98 Started (PID: {os.getpid()}) ===")
 
 # ================= 1.5 特殊模式 (必须在 Mutex 之前) =================
 # --paste:        右键粘贴, 短命工具进程, 绕过单实例
@@ -125,10 +137,10 @@ def run_restart_wait(args):
     config_mgr.log(f"[RestartWait] Monitoring old PID {old_pid}...")
 
     SYNCHRONIZE = 0x00100000
-    handle = ctypes.windll.kernel32.OpenProcess(SYNCHRONIZE, False, old_pid)
+    handle = kernel32.OpenProcess(SYNCHRONIZE, False, old_pid)
     if handle:
-        ret = ctypes.windll.kernel32.WaitForSingleObject(handle, 10000)
-        ctypes.windll.kernel32.CloseHandle(handle)
+        ret = kernel32.WaitForSingleObject(handle, 10000)
+        kernel32.CloseHandle(handle)
         if ret == 0:  # WAIT_OBJECT_0 = old process exited
             config_mgr.log(f"[RestartWait] Old PID {old_pid} exited cleanly.")
         else:  # WAIT_TIMEOUT
@@ -155,9 +167,9 @@ if "--restart-wait" in sys.argv:
 # 命名 Mutex: 确保同时只有一个主实例运行
 # --paste / --restart-wait 已在上面绕过, 不碰 Mutex
 SINGLE_INSTANCE_MUTEX = "Mouse4_SingleInstance_JohnWish"
-h_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
-if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-    ctypes.windll.kernel32.CloseHandle(h_mutex)
+h_mutex = kernel32.CreateMutexW(None, False, SINGLE_INSTANCE_MUTEX)
+if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    kernel32.CloseHandle(h_mutex)
     config_mgr.log("[Mutex] Another instance already running. Exiting.")
     sys.exit(0)
 
@@ -241,7 +253,7 @@ def restart_program():
         # 优雅退出: 3 秒 timer 兜底, 防止 event loop 卡死
         app = QApplication.instance()
         if app:
-            QTimer.singleShot(3000, lambda: os._exit(0))
+            threading.Timer(3.0, lambda: os._exit(0)).start()
             app.quit()
         else:
             os._exit(0)
