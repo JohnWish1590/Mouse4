@@ -1,5 +1,5 @@
 """
-Mouse4 V100 - 睡眠唤醒重启可观测版
+Mouse4 V101 - 睡眠唤醒重启可观测版
 核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
 修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
 """
@@ -50,7 +50,16 @@ kernel32.WaitForSingleObject.argtypes = [ctypes.wintypes.HANDLE, ctypes.wintypes
 kernel32.CloseHandle.restype = ctypes.wintypes.BOOL
 kernel32.CloseHandle.argtypes = [ctypes.wintypes.HANDLE]
 
-# ================= 0.5 启动缓冲 =================
+# ================= 0.5 PyInstaller onefile 环境重置 =================
+# onefile 模式: 子进程继承父进程 _MEI 临时目录。
+# 父进程退出时清理 _MEI, 子进程还在用 → bootloader 崩溃
+# PYINSTALLER_RESET_ENVIRONMENT 让子进程创建独立 _MEI。
+def _reset_env():
+    env = os.environ.copy()
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return env
+
+# ================= 0.7 启动缓冲 =================
 time.sleep(0.3)
 
 # ================= 1. 配置管理与日志 =================
@@ -102,7 +111,7 @@ class ConfigManager:
 config_mgr = ConfigManager()
 _startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
 config_mgr.log(
-    f"=== Mouse4 V100 Started role={_startup_role} "
+    f"=== Mouse4 V101 Started role={_startup_role} "
     f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
 )
 
@@ -169,7 +178,8 @@ def run_restart_wait(args):
     DETACHED_PROCESS = 0x00000008
     for attempt in range(1, 4):
         try:
-            proc = subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd)
+            proc = subprocess.Popen(cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd,
+                                   env=_reset_env() if getattr(sys, "frozen", False) else None)
             config_mgr.log(f"[RestartWait] Launch attempt {attempt}/3 requested (new PID: {proc.pid}, cwd={launch_cwd})")
             time.sleep(2)
             code = proc.poll()
@@ -273,7 +283,8 @@ def restart_program():
             helper_cmd = [sys.executable, script_path, '--restart-wait', str(old_pid)]
             launch_cwd = os.path.dirname(script_path)
 
-        helper_proc = subprocess.Popen(helper_cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd)
+        helper_proc = subprocess.Popen(helper_cmd, creationflags=DETACHED_PROCESS, cwd=launch_cwd,
+                               env=_reset_env() if getattr(sys, "frozen", False) else None)
 
         config_mgr.log(f"[Restart] Helper launched (PID: {helper_proc.pid}, cwd={launch_cwd}). Exiting gracefully...")
         # 不手动释放 Mutex! 由 OS 在进程退出时自然释放。

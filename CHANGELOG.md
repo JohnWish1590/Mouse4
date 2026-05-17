@@ -2,6 +2,23 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V101.0] - 2026-05-17 (PyInstaller onefile env fix - _MEI resurrection)
+### Root Cause (codex analysis)
+V99-V100 sleep wake restart failure: not Python exception, not Qt conflict.
+Red dialog: `Failed to start embedded python interpreter!`
+Yellow dialog: `Failed to remove temporary directory`
+
+**PyInstaller onefile classic pitfall**: onefile extracts to `_MEIxxxxx` temp dir.
+Child via Popen inherits parent's `_MEI` env. Parent exits and cleans `_MEI`,
+but child still uses it - bootloader fails to start embedded Python.
+proc.poll() returns None (OS process alive) but Python never runs.
+
+### Changed
+- `PYINSTALLER_RESET_ENVIRONMENT=1`: Set on all outlive-parent Popen calls
+  (helper launch, main launch). Child creates independent `_MEI` temp dir.
+- `_reset_env()` helper: encapsulates env logic, frozen-mode only.
+- onefile + env var is minimal fix; onedir would avoid this entirely.
+
 ## [V100.0] - 2026-05-17 (可观测重启版 - Observable Restart)
 ### Fixed
 - **V99 重启黑箱**: V99 的 helper 声称 "New main instance launched" 但新主进程从未留下启动日志。helper 立即退出，旧进程也已不在，程序彻底消失。
