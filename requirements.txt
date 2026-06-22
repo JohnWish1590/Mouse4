@@ -1,4 +1,7 @@
 uiautomation
 pynput
-keyboard
 pyinstaller
+Pillow
+mss
+PyQt6
+pywin32

@@ -29,11 +29,11 @@ jobs:
       # --onefile: 打包成单文件
       # --name: 软件的名字
       run: |
-        pyinstaller --noconsole --onefile --name "MouseMaster" main.py
+        pyinstaller --noconsole --onefile --name "Mouse4" --icon logo.ico main.pyw
 
     - name: Upload Artifact (上传结果供下载)
       uses: actions/upload-artifact@v4
       with:
-        name: MouseMaster-Software # 下载时的压缩包名字
-        path: dist/MouseMaster.exe # 打包好的文件路径
+        name: Mouse4
+        path: dist/Mouse4.exe
         retention-days: 5 # 文件保留5天，过期自动清理
