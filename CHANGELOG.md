@@ -2,6 +2,16 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V102.0] - 2026-07-22 (箭头崩溃修复 + 30天日志裁剪)
+### Fixed
+- **箭头绘制崩溃**: `draw_arrow` 中 `end` 是 `QPoint` 但减 `QPointF` 时报 `TypeError`，
+  导致截图标注使用箭头后崩溃弹窗。修复: 函数开头统一转 `QPointF`。
+### Added
+- **30 天日志自动裁剪**: 写入日志时自动清理超过 30 天的记录，
+  `[FATAL CRASH]` 行永久保留。每天最多执行一次，无性能开销。
+### Changed
+- 版本号 V101.0 → V102.0
+
 ## [V101.0] - 2026-05-17 (PyInstaller onefile env fix - _MEI resurrection)
 ### Root Cause (codex analysis)
 V99-V100 sleep wake restart failure: not Python exception, not Qt conflict.

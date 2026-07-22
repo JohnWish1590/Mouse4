@@ -1,5 +1,5 @@
 """
-Mouse4 V101 - 睡眠唤醒重启可观测版
+Mouse4 V102 - 睡眠唤醒重启可观测版
 核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
 修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
 """
@@ -80,7 +80,40 @@ class ConfigManager:
             with open(self.log_file, 'a', encoding='utf-8') as f:
                 t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 f.write(f"[{t}] {msg}\n")
+            self._prune_log()
         except: pass
+
+    def _prune_log(self):
+        """删除超过 30 天的日志行，每天最多执行一次"""
+        now = datetime.datetime.now()
+        last_prune = getattr(self, '_last_prune_date', None)
+        if last_prune and (now - last_prune).days < 1:
+            return
+        self._last_prune_date = now
+        try:
+            if not self.log_file.exists():
+                return
+            cutoff = now - datetime.timedelta(days=30)
+            with open(self.log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            kept = []
+            for line in lines:
+                if line[:11] == '[FATAL CRASH':
+                    kept.append(line)
+                    continue
+                if line[0] == '[' and len(line) > 20:
+                    try:
+                        dt = datetime.datetime.strptime(line[1:11], '%Y-%m-%d')
+                        if dt >= cutoff:
+                            kept.append(line)
+                    except:
+                        kept.append(line)
+                else:
+                    kept.append(line)
+            with open(self.log_file, 'w', encoding='utf-8') as f:
+                f.writelines(kept)
+        except:
+            pass
     
     def _load(self):
         try:
@@ -111,7 +144,7 @@ class ConfigManager:
 config_mgr = ConfigManager()
 _startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
 config_mgr.log(
-    f"=== Mouse4 V101 Started role={_startup_role} "
+    f"=== Mouse4 V102 Started role={_startup_role} "
     f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
 )
 
@@ -555,6 +588,7 @@ class SnippingWindow(QWidget):
             p.drawText(item['point'], item['text'])
 
     def draw_arrow(self, p, start, end):
+        start, end = QPointF(start), QPointF(end)
         p.drawLine(start, end)
         angle = math.atan2(end.y()-start.y(), end.x()-start.x())
         s = 15
