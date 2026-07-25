@@ -1,5 +1,5 @@
 """
-Mouse4 V102 - 睡眠唤醒重启可观测版
+Mouse4 V103 - 睡眠唤醒重启可观测版
 核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
 修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
 """
@@ -144,7 +144,7 @@ class ConfigManager:
 config_mgr = ConfigManager()
 _startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
 config_mgr.log(
-    f"=== Mouse4 V102 Started role={_startup_role} "
+    f"=== Mouse4 V103 Started role={_startup_role} "
     f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
 )
 
@@ -469,20 +469,16 @@ class SnippingWindow(QWidget):
     def __init__(self, screen_info):
         super().__init__()
         self.setScreen(screen_info); self.setGeometry(screen_info.geometry())
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
-        self.showFullScreen()
-        
         self.full_screenshot = None; self.scale_factor = 1.0
-        self.grab_current_screen()
-        
         self.begin = QPoint(); self.end = QPoint()
         self.is_selecting = False; self.has_selected = False
         self.drawings = []; self.current_drawing = None; self.draw_mode = None
         self.current_color = config.get_last_color(); self.current_font_size = config.get_last_font_size()
         self.active_input = None
-        
         self._last_click_time = 0; self._double_click_threshold = 400
-        
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
+        self.showFullScreen()
+        self.grab_current_screen()
         self.toolbar = SnippingToolBar(self); self.toolbar.hide()
         self.setup_ui()
 

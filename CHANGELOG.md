@@ -2,6 +2,14 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V103.0] - 2026-07-26 (截图白屏崩溃修复 - full_screenshot 初始化时序)
+### Fixed
+- **截图白屏后崩溃**: `showFullScreen()` 立即触发 `paintEvent`，但此时 `full_screenshot`
+  尚未初始化(在构造函数后续行才赋值)，导致 `AttributeError: no attribute full_screenshot`。
+  修复: 所有属性初始化移到 `showFullScreen()` 之前。
+### Changed
+- 版本号 V102.0 → V103.0
+
 ## [V102.0] - 2026-07-22 (箭头崩溃修复 + 30天日志裁剪)
 ### Fixed
 - **箭头绘制崩溃**: `draw_arrow` 中 `end` 是 `QPoint` 但减 `QPointF` 时报 `TypeError`，
