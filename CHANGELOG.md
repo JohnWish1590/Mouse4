@@ -2,6 +2,15 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V104.0] - 2026-07-28 (灰屏修复 + 日志倒序)
+### Fixed
+- **首次截图灰屏**: showFullScreen() 先画了灰色遮罩再 grab_current_screen()，
+  mss 截到的是遮罩而非屏幕内容。将 grab_current_screen() 移到 showFullScreen() 之前，
+  确保截图的是原始屏幕内容而不是自己的遮罩层。
+### Changed
+- **debug.log 倒序**: 最新日志写入文件头而不是文件尾，文字越狱查看时不再需要滚动到底部。
+- 版本号 V103.0 → V104.0
+
 ## [V103.0] - 2026-07-26 (截图白屏崩溃修复 - full_screenshot 初始化时序)
 ### Fixed
 - **截图白屏后崩溃**: `showFullScreen()` 立即触发 `paintEvent`，但此时 `full_screenshot`

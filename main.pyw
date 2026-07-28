@@ -1,5 +1,5 @@
 """
-Mouse4 V103 - 睡眠唤醒重启可观测版
+Mouse4 V104 - 睡眠唤醒重启可观测版
 核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
 修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
 """
@@ -77,14 +77,20 @@ class ConfigManager:
 
     def log(self, msg):
         try:
-            with open(self.log_file, 'a', encoding='utf-8') as f:
-                t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                f.write(f"[{t}] {msg}\n")
+            t = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            entry = f"[{t}] {msg}\n"
+            # 写入到文件头（倒序：最新在顶部）
+            if self.log_file.exists():
+                old = open(self.log_file, 'r', encoding='utf-8').read()
+            else:
+                old = ''
+            with open(self.log_file, 'w', encoding='utf-8') as f:
+                f.write(entry + old)
             self._prune_log()
         except: pass
 
     def _prune_log(self):
-        """删除超过 30 天的日志行，每天最多执行一次"""
+        """从文件尾删除超过 30 天的日志行（倒序存储，旧的在尾部），每天最多执行一次"""
         now = datetime.datetime.now()
         last_prune = getattr(self, '_last_prune_date', None)
         if last_prune and (now - last_prune).days < 1:
@@ -144,7 +150,7 @@ class ConfigManager:
 config_mgr = ConfigManager()
 _startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
 config_mgr.log(
-    f"=== Mouse4 V103 Started role={_startup_role} "
+    f"=== Mouse4 V104 Started role={_startup_role} "
     f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
 )
 
@@ -477,8 +483,8 @@ class SnippingWindow(QWidget):
         self.active_input = None
         self._last_click_time = 0; self._double_click_threshold = 400
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
-        self.showFullScreen()
         self.grab_current_screen()
+        self.showFullScreen()
         self.toolbar = SnippingToolBar(self); self.toolbar.hide()
         self.setup_ui()
 
