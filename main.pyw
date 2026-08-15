@@ -1,7 +1,7 @@
 """
-Mouse4 V104 - 睡眠唤醒重启可观测版
-核心：restart-wait helper 延迟/重试 + 明确 main/helper/paste 角色日志
-修复：helper 声称 launched 但新主进程未留下启动日志的黑箱问题
+Mouse4 V107 - 混合 DPI 逐屏抓取跨屏截图
+核心：物理像素模式 + 逐屏抓取拼接(消除混合 DPI 下单次 BitBlt 的接缝白条)
+重写工具栏定位逻辑(下方放不下/落进空隙带时自动翻到上方)
 """
 
 import sys
@@ -24,11 +24,12 @@ from io import BytesIO
 # GUI 库
 from PyQt6.QtWidgets import (QApplication, QWidget, QSystemTrayIcon, QMenu, 
                              QMessageBox, QStyle, QPushButton, QFrame, QLineEdit, QComboBox, 
-                             QVBoxLayout, QHBoxLayout, QLabel)
+                             QVBoxLayout, QHBoxLayout, QLabel, QGraphicsDropShadowEffect)
 from PyQt6.QtCore import (Qt, QRect, QPoint, pyqtSignal, QObject, 
-                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF)
+                          QPropertyAnimation, QEasingCurve, QTimer, QSize, QPointF, QByteArray, QRectF)
 from PyQt6.QtGui import (QPainter, QColor, QPen, QImage, QAction, 
                          QFont, QIcon, QBrush, QPixmap, QCursor, QPainterPath, QPolygonF)
+from PyQt6.QtSvg import QSvgRenderer
 import mss
 # 图像处理库
 from PIL import Image
@@ -150,7 +151,7 @@ class ConfigManager:
 config_mgr = ConfigManager()
 _startup_role = "restart-wait" if "--restart-wait" in sys.argv else ("paste" if "--paste" in sys.argv else "main")
 config_mgr.log(
-    f"=== Mouse4 V104 Started role={_startup_role} "
+    f"=== Mouse4 V107 Started role={_startup_role} "
     f"(PID: {os.getpid()}, exe={sys.executable}, cwd={os.getcwd()}, args={sys.argv[1:]}) ==="
 )
 
@@ -281,8 +282,8 @@ threading.excepthook = thread_exception_handler
 class GlobalConfig:
     hotkey = 'ctrl+1'
     double_click_speed = 0.3
-    theme_color_hex = '#00FF00'
-    default_draw_color_hex = '#FF0000'
+    theme_color_hex = '#0A84FF'
+    default_draw_color_hex = '#FF3B30'
     border_width = 2
     icon_filename = 'logo.ico'
     github_url = "https://github.com/JohnWish1590/Mouse4"
@@ -291,15 +292,115 @@ class GlobalConfig:
     
     KEY_LAST_COLOR = 'last_draw_color'
     KEY_LAST_FONT_SIZE = 'last_font_size'
+
+    @property
+    def screenshot_dir(self):
+        d = config_mgr.get('screenshot_dir')
+        if not d:
+            d = os.path.join(os.path.expanduser('~'), 'Pictures', 'Mouse4Captures')
+        return d
     
     @property
-    def theme_color(self): return QColor(self.theme_color_hex)
+    def theme_color(self): return QColor(APPLE_THEME['accent'])
     def get_last_color(self): return QColor(config_mgr.get_color(self.KEY_LAST_COLOR, self.default_draw_color_hex))
     def save_last_color(self, color): config_mgr.set_color(self.KEY_LAST_COLOR, color)
     def get_last_font_size(self): return config_mgr.get_int(self.KEY_LAST_FONT_SIZE, 18)
     def save_last_font_size(self, size): config_mgr.set(self.KEY_LAST_FONT_SIZE, size)
 
 config = GlobalConfig()
+
+# ================= 2.5 Apple style design system (visual only, no coord/grab changes) =================
+def _apple_invert_color(c):
+    col = QColor(c)
+    r, g, b = col.red(), col.green(), col.blue()
+    lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0
+    return QColor(255 - r, 255 - g, 255 - b) if lum > 0.5 else QColor(0, 0, 0)
+
+APPLE_THEME = {
+    'accent': '#0A84FF',
+    'invert': _apple_invert_color,
+    'palette': ['#FF3B30', '#FFCC00', '#34C759', '#0A84FF', '#00FFFF', '#FF2D95', '#FFFFFF', '#000000'],
+    'color_btn_css': "background-color: {color}; border-radius: 12px; border: 2px solid rgba(255,255,255,0.35);",
+    'overlay_css': "background: rgba(255,255,255,0.06); border: 2px solid {inv}; color: {color}; "
+                   "font-family: 'Microsoft YaHei'; font-weight: bold; font-size: {size}px;",
+    'toolbar_css': "QWidget { background-color: rgba(40,42,48,0.92); border-radius: 14px; "
+                   "border: 1px solid rgba(255,255,255,0.12); }"
+                   "QPushButton { background: transparent; border: none; color: #E5E5EA; "
+                   "font-size: 23px; min-width: 42px; min-height: 38px; padding: 2px 10px; "
+                   "margin: 0; border-radius: 9px; }"
+                   "QPushButton:hover { background: rgba(255,255,255,0.12); color: white; }"
+                   "QPushButton:checked { background: rgba(10,132,255,0.30); color: #0A84FF; }",
+    'panel_css': "background-color: rgba(40,42,48,0.92); border-radius: 14px; "
+                 "border: 1px solid rgba(255,255,255,0.12);",
+    'combo_css': "QComboBox { background: rgba(255,255,255,0.10); color: white; "
+                 "border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; padding: 2px 6px; }"
+                 "QComboBox QAbstractItemView { background: #2b2b2b; color: white; "
+                 "selection-background-color: #0A84FF; }",
+    'btn_ok_css': "color: #0A84FF; font-weight: bold; font-size: 22px;",
+    'btn_cancel_css': "color: #FF3B30; font-weight: bold; font-size: 20px;",
+    'toast_css': "color: #34C759; background: rgba(0,0,0,180); border: 1px solid #34C759; "
+                 "padding: 6px 10px; border-radius: 8px; font-weight: bold;",
+}
+
+APPLE_SVGS = {
+    'rect': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+    'ellipse': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+    'arrow': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 18 L18 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 6 H18 V14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'pen': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 4 L20 10 L11 19 L4 19 L4 12 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+    'text': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6 H18 M12 6 V18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    'undo': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9 L8 4 L13 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 4 H16 A6 6 0 0 1 16 16 H4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    'cancel': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>',
+    'ok': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5 13 L10 18 L19 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+}
+
+def _make_icon(svg, color):
+    # PyQt6 的 QSvgRenderer 没有 setColor(); 直接把颜色写进 SVG 字符串
+    hexc = color.name() if hasattr(color, 'name') else str(color)
+    svg2 = svg.replace('currentColor', hexc)
+    r = QSvgRenderer(QByteArray(svg2.encode('utf-8')))
+    r.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+    pm = QPixmap(24, 24); pm.fill(Qt.GlobalColor.transparent)
+    pp = QPainter(pm); r.render(pp, QRectF(0, 0, 24, 24)); pp.end()
+    return QIcon(pm)
+
+class AppleIconButton(QPushButton):
+    def __init__(self, svg, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self._svg = svg
+        try:
+            self._normal = _make_icon(svg, QColor('#E5E5EA'))
+            self._active = _make_icon(svg, QColor('#0A84FF'))
+            self.setIcon(self._normal)
+            self.setIconSize(QSize(24, 24))
+        except Exception as e:
+            config_mgr.log(f"[Icon] SVG render failed: {e}")
+    def setChecked(self, v):
+        super().setChecked(v)
+        if hasattr(self, '_active'):
+            self.setIcon(self._active if v else self._normal)
+def _add_apple_shadow(widget):
+    # disabled: QGraphicsDropShadowEffect on a fullscreen capture window causes a black
+    # overlay glitch. Kept as a no-op so the call sites stay unchanged for a future fix.
+    return
+
+
+def _draw_apple_size_label(painter, txt, rect, scale=1.0):
+    font = QFont("SF Pro Text", max(10, int(11 * scale)), QFont.Weight.Bold)
+    painter.setFont(font)
+    pad_x = 10
+    w = painter.fontMetrics().horizontalAdvance(txt) + pad_x * 2
+    h = painter.fontMetrics().height() + 6
+    lx = rect.x() + (rect.width() - w) / 2.0
+    ly = rect.y() + 8
+    if lx < 0: lx = 4
+    bottom = rect.y() + rect.height() - h - 8
+    if ly > bottom: ly = bottom
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(0, 0, 0, 170))
+    painter.drawRoundedRect(int(lx), int(ly), int(w), int(h), int(h/2), int(h/2))
+    painter.setPen(QColor('white'))
+    painter.drawText(int(lx) + pad_x, int(ly) + h - 4, txt)
 
 # ================= 3. 三角色重启 =================
 # 重启流程:
@@ -359,6 +460,11 @@ def watchdog_thread():
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
+    # PyInstaller 6 onedir: 资源放在 exe 旁的 _internal 目录 (V106 onedir 打包)
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    internal = os.path.join(exe_dir, '_internal', relative_path)
+    if os.path.exists(internal):
+        return internal
     return os.path.join(os.path.abspath("."), relative_path)
 
 
@@ -405,7 +511,7 @@ def start_mouse_thread():
 
 class SignalComm(QObject):
     trigger_screenshot = pyqtSignal()
-    show_toast = pyqtSignal(int, int)
+    show_toast = pyqtSignal(int, int, str)
 
 comm = SignalComm()
 active_windows = []
@@ -416,7 +522,7 @@ class ColorButton(QPushButton):
         self.color = QColor(color)
         self.setFixedSize(24, 24); self.setCheckable(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet(f"background-color: {self.color.name()}; border-radius: 12px; border: 2px solid #555;")
+        self.setStyleSheet(APPLE_THEME['color_btn_css'].format(color=self.color.name()))
 
 class OverlayInput(QLineEdit):
     def __init__(self, parent, pos, color, font_size):
@@ -425,56 +531,66 @@ class OverlayInput(QLineEdit):
         self.update_style(); self.adjustSize(); self.setFocus()
         self.textChanged.connect(self.adjust_width)
     def update_style(self):
-        self.setStyleSheet(f"background: transparent; border: 1px dashed rgba(255,255,255,0.5); color: {self.color.name()}; font-family: 'Microsoft YaHei'; font-weight: bold; font-size: {self.font_size}px;")
+        inv = APPLE_THEME['invert'](self.color)
+        self.setFont(QFont("Microsoft YaHei", self.font_size, QFont.Weight.Bold))
+        self.setStyleSheet(APPLE_THEME['overlay_css'].format(color=self.color.name(), inv=inv.name(), size=self.font_size))
         self.adjust_width()
     def adjust_width(self):
-        self.setFixedWidth(max(50, self.fontMetrics().horizontalAdvance(self.text()) + 30))
-        self.setFixedHeight(self.fontMetrics().height() + 10)
+        fm = self.fontMetrics()
+        self.setFixedWidth(max(60, fm.horizontalAdvance(self.text()) + 24))
+        self.setFixedHeight(fm.height() + 12)
 
 class SnippingToolBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.SubWindow)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        
-        main_layout = QVBoxLayout(self); main_layout.setContentsMargins(0,0,0,0); main_layout.setSpacing(0)
-        
+
+        main_layout = QVBoxLayout(self); main_layout.setContentsMargins(0,0,0,0); main_layout.setSpacing(6)
+
         self.tools_widget = QWidget()
-        self.tools_widget.setStyleSheet("QWidget { background-color: #2b2b2b; border-radius: 6px; border: 1px solid #444; } QPushButton { background: transparent; border: none; color: #B0B0B0; font-size: 20px; padding: 6px; } QPushButton:hover { background: #3f3f3f; color: white; } QPushButton:checked { background: #4a4a4a; color: #07c160; }")
-        t_layout = QHBoxLayout(self.tools_widget); t_layout.setContentsMargins(10,8,10,8); t_layout.setSpacing(8)
-        
-        self.btn_rect = QPushButton("⬜"); self.btn_rect.setCheckable(True)
-        self.btn_ellipse = QPushButton("⭕"); self.btn_ellipse.setCheckable(True)
-        self.btn_arrow = QPushButton("↗"); self.btn_arrow.setCheckable(True)
-        self.btn_pen = QPushButton("✎"); self.btn_pen.setCheckable(True)
-        self.btn_text = QPushButton("T"); self.btn_text.setCheckable(True)
-        self.btn_undo = QPushButton("↶")
-        self.btn_cancel = QPushButton("✕"); self.btn_cancel.setStyleSheet("color: #ff5f57; font-weight: bold")
-        self.btn_ok = QPushButton("✓"); self.btn_ok.setStyleSheet("color: #07c160; font-weight: bold; font-size: 22px")
-        
-        for b in [self.btn_rect, self.btn_ellipse, self.btn_arrow, self.btn_pen, self.btn_text, self.btn_undo, self.btn_cancel, self.btn_ok]:
+        self.tools_widget.setStyleSheet(APPLE_THEME['toolbar_css'])
+        t_layout = QHBoxLayout(self.tools_widget); t_layout.setContentsMargins(6,5,6,5); t_layout.setSpacing(0)
+
+        self.btn_rect = AppleIconButton(APPLE_SVGS['rect'])
+        self.btn_ellipse = AppleIconButton(APPLE_SVGS['ellipse'])
+        self.btn_arrow = AppleIconButton(APPLE_SVGS['arrow'])
+        self.btn_pen = AppleIconButton(APPLE_SVGS['pen'])
+        self.btn_text = AppleIconButton(APPLE_SVGS['text'])
+        for b in [self.btn_rect, self.btn_ellipse, self.btn_arrow, self.btn_pen, self.btn_text]:
             t_layout.addWidget(b)
-            
-        self.colors_widget = QWidget(); self.colors_widget.setStyleSheet("background-color: #2b2b2b; border-radius: 6px; border: 1px solid #444;")
+            sep = QFrame(); sep.setFrameShape(QFrame.Shape.VLine); sep.setFixedWidth(1)
+            sep.setStyleSheet("background: rgba(255,255,255,0.14);"); t_layout.addWidget(sep)
+
+        self.btn_undo = AppleIconButton(APPLE_SVGS['undo'])
+        t_layout.addWidget(self.btn_undo)
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.VLine); sep2.setFixedWidth(1)
+        sep2.setStyleSheet("background: rgba(255,255,255,0.14);"); t_layout.addWidget(sep2)
+
+        self.btn_cancel = AppleIconButton(APPLE_SVGS['cancel']); self.btn_cancel.setStyleSheet(APPLE_THEME['btn_cancel_css'])
+        self.btn_ok = AppleIconButton(APPLE_SVGS['ok']); self.btn_ok.setStyleSheet(APPLE_THEME['btn_ok_css'])
+        t_layout.addWidget(self.btn_cancel); t_layout.addWidget(self.btn_ok)
+
+        self.colors_widget = QWidget(); self.colors_widget.setStyleSheet(APPLE_THEME['panel_css'])
         c_layout = QHBoxLayout(self.colors_widget); c_layout.setContentsMargins(10,6,10,6); c_layout.setSpacing(10)
-        
+
         self.size_combo = QComboBox(); self.size_combo.addItems([str(s) for s in [12,14,16,18,24,36,48]])
         self.size_combo.setFixedWidth(68)
-        self.size_combo.setStyleSheet("QComboBox { background: #3f3f3f; color: white; border: 1px solid #555; }")
+        self.size_combo.setStyleSheet(APPLE_THEME['combo_css'])
         c_layout.addWidget(self.size_combo)
-        
+
         self.color_btns = []
-        for c in ['#FF0000', '#FFCC00', '#07c160', '#1E90FF', '#00FFFF', '#FF00FF', '#FFFFFF', '#000000']:
+        for c in APPLE_THEME['palette']:
             btn = ColorButton(c); self.color_btns.append(btn); c_layout.addWidget(btn)
-            
+
         main_layout.addWidget(self.tools_widget); main_layout.addWidget(self.colors_widget)
         self.colors_widget.hide()
         self.setLayout(main_layout)
 
 class SnippingWindow(QWidget):
-    def __init__(self, screen_info):
+    def __init__(self, virtual_geo):
         super().__init__()
-        self.setScreen(screen_info); self.setGeometry(screen_info.geometry())
+        self.virtual_geo = virtual_geo
         self.full_screenshot = None; self.scale_factor = 1.0
         self.begin = QPoint(); self.end = QPoint()
         self.is_selecting = False; self.has_selected = False
@@ -483,8 +599,16 @@ class SnippingWindow(QWidget):
         self.active_input = None
         self._last_click_time = 0; self._double_click_threshold = 400
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
+        # V105: 窗口几何 = 整个虚拟桌面(所有显示器并集), 窗口本地坐标 == 虚拟桌面坐标
+        self.setGeometry(virtual_geo)
+        _t = time.time()
         self.grab_current_screen()
-        self.showFullScreen()
+        config_mgr.log(f"[Shot] grab_virtual_desktop in {(time.time()-_t)*1000:.0f}ms")
+        _t2 = time.time()
+        # V105: 不用 showFullScreen()(全屏状态会被 Windows 钉在单块屏上), 用 show() 保留跨屏几何
+        self.show()
+        config_mgr.log(f"[Shot] window shown in {(time.time()-_t2)*1000:.0f}ms "
+                       f"geo=({self.geometry().x()},{self.geometry().y()}) {self.geometry().width()}x{self.geometry().height()}")
         self.toolbar = SnippingToolBar(self); self.toolbar.hide()
         self.setup_ui()
 
@@ -506,22 +630,79 @@ class SnippingWindow(QWidget):
         self.toolbar.size_combo.currentIndexChanged.connect(lambda: self.set_font_size(int(self.toolbar.size_combo.currentText())))
 
     def grab_current_screen(self):
+        """V107: 逐屏抓取(每屏物理像素) → 按物理偏移拼成虚拟画布。
+        物理像素模式下 QScreen::geometry() 与 mss 均为物理像素、完全一致, 1:1 对齐。
+        逐屏抓取消除混合 DPI 下单次整块虚拟桌面 BitBlt 的接缝垃圾(旧 V105 的白条)。"""
         try:
+            vg = self.virtual_geo
+            self._monitor_plan = self._build_monitor_plan()
+            u = QRect()
+            for geo, dpr, mon in self._monitor_plan:
+                u = u.united(QRect(geo.x() - vg.x(), geo.y() - vg.y(), geo.width(), geo.height()))
+            self._monitor_union = u
+
+            canvas = QPixmap(vg.width(), vg.height())
+            canvas.fill(QColor(0, 0, 0))  # 包围盒空隙区域为黑(与 ShareX/Flameshot 一致)
+            p = QPainter(canvas)
+            p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             with mss.mss() as sct:
-                geo = self.geometry()
-                cx, cy = geo.x() + geo.width()//2, geo.y() + geo.height()//2
-                monitor = sct.monitors[1]
-                for m in sct.monitors[1:]:
-                    if m['left'] <= cx < m['left']+m['width'] and m['top'] <= cy < m['top']+m['height']:
-                        monitor = m; break
-                
-                img = sct.grab(monitor)
-                self.scale_factor = img.width / max(1, geo.width())
-                qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_ARGB32)
-                self.full_screenshot = QPixmap.fromImage(qimg.copy())
+                for geo, dpr, mon in self._monitor_plan:
+                    img = sct.grab(mon)
+                    qimg = QImage(img.bgra, img.width, img.height, QImage.Format.Format_ARGB32)
+                    pm = QPixmap.fromImage(qimg.copy())
+                    p.drawPixmap(geo.x() - vg.x(), geo.y() - vg.y(), pm)
+                    stats = self._grab_stats(img)
+                    if stats and stats[1] == 0:
+                        config_mgr.log(f"[Shot] WARNING screen ({geo.x()},{geo.y()}) {geo.width()}x{geo.height()} "
+                                       f"grab all-black (lum={stats}) — possible HDR/bit-depth issue, need DXGI")
+                    config_mgr.log(f"[Shot] screen {geo.width()}x{geo.height()} dpr={dpr:.3f} "
+                                   f"phys={img.width}x{img.height} lum={stats}")
+            p.end()
+            self.full_screenshot = canvas
+            self.scale_factor = 1.0
+            config_mgr.log(f"[Shot] virtual canvas {vg.width()}x{vg.height()} "
+                           f"monitors={len(self._monitor_plan)} union={u.width()}x{u.height()}")
         except Exception as e: 
             config_mgr.log(f"[Screenshot] Grab Error: {e}")
             self.full_screenshot = QPixmap()
+
+    def _build_monitor_plan(self):
+        """返回 [(dip_rect(QRect), dpr, mss_region), ...]
+        用物理位置重叠把 QScreen(DIP) 与 mss 监视器(物理像素, 真值)配对, 顺序无关。"""
+        plan = []
+        try:
+            with mss.mss() as sct:
+                mons = sct.monitors[1:]
+                for screen in QApplication.screens():
+                    geo = screen.geometry()
+                    dpr = screen.devicePixelRatio()
+                    want = (int(round(geo.x() * dpr)), int(round(geo.y() * dpr)),
+                            int(round(geo.width() * dpr)), int(round(geo.height() * dpr)))
+                    best, best_ov = None, -1
+                    for m in mons:
+                        ov = (min(m['left'] + m['width'], want[0] + want[2]) - max(m['left'], want[0])) * \
+                             (min(m['top'] + m['height'], want[1] + want[3]) - max(m['top'], want[1]))
+                        if ov > best_ov:
+                            best_ov, best = ov, m
+                    if best is None:
+                        best = {'left': want[0], 'top': want[1], 'width': want[2], 'height': want[3]}
+                    plan.append((geo, dpr, best))
+        except Exception as e:
+            config_mgr.log(f"[Shot] monitor plan fallback: {e}")
+            for screen in QApplication.screens():
+                geo = screen.geometry(); dpr = screen.devicePixelRatio()
+                plan.append((geo, dpr, {'left': int(round(geo.x()*dpr)), 'top': int(round(geo.y()*dpr)),
+                                        'width': int(round(geo.width()*dpr)), 'height': int(round(geo.height()*dpr))}))
+        return plan
+
+    def _grab_stats(self, img):
+        """采样统计抓取图像亮度范围(min,max), 用于 HDR/黑屏诊断"""
+        try:
+            from PIL import Image as PILImage
+            pi = PILImage.frombytes('RGB', (img.width, img.height), img.bgra, 'raw', 'BGRX')
+            return pi.convert('L').resize((32, 32)).getextrema()
+        except Exception:
+            return None
 
     def set_color(self, color, btn):
         self.current_color = color; config.save_last_color(color)
@@ -573,10 +754,7 @@ class SnippingWindow(QWidget):
                     painter.setPen(QPen(self.current_color, 2)); self.draw_item(painter, self.current_drawing)
                 
                 txt = f"{sw} x {sh}"
-                painter.setPen(Qt.PenStyle.NoPen); painter.setBrush(QColor('black'))
-                painter.drawRect(rect.x(), rect.y()-25, len(txt)*9, 20)
-                painter.setPen(QColor('white')); painter.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-                painter.drawText(rect.x()+5, rect.y()-10, txt)
+                _draw_apple_size_label(painter, txt, rect, 1.0)
 
     def draw_item(self, p, item):
         t = item['type']
@@ -584,18 +762,29 @@ class SnippingWindow(QWidget):
         elif t == 'ellipse': p.drawEllipse(item['rect'])
         elif t == 'pen': p.drawPath(item['path'])
         elif t == 'arrow': self.draw_arrow(p, item['start'], item['end'])
-        elif t == 'text': 
+        elif t == 'text':
             p.setFont(QFont("Microsoft YaHei", item['size'], QFont.Weight.Bold))
+            inv = APPLE_THEME['invert'](item['color'])
+            p.setPen(QPen(inv, max(2, item['size'] // 8)))
+            p.drawText(item['point'], item['text'])
             p.setPen(QPen(item['color']))
             p.drawText(item['point'], item['text'])
 
     def draw_arrow(self, p, start, end):
         start, end = QPointF(start), QPointF(end)
-        p.drawLine(start, end)
-        angle = math.atan2(end.y()-start.y(), end.x()-start.x())
+        main_pen = p.pen()
+        inv = APPLE_THEME['invert'](main_pen.color())
+        halo = QPen(inv, main_pen.width() + max(2, main_pen.width() // 3))
+        p.setPen(halo)
+        angle0 = math.atan2(end.y()-start.y(), end.x()-start.x())
         s = 15
-        p1 = end - QPointF(math.cos(angle+math.pi/6)*s, math.sin(angle+math.pi/6)*s)
-        p2 = end - QPointF(math.cos(angle-math.pi/6)*s, math.sin(angle-math.pi/6)*s)
+        p1 = end - QPointF(math.cos(angle0+math.pi/6)*s, math.sin(angle0+math.pi/6)*s)
+        p2 = end - QPointF(math.cos(angle0-math.pi/6)*s, math.sin(angle0-math.pi/6)*s)
+        p.drawLine(start, end)
+        p.drawPolygon(QPolygonF([QPointF(end), p1, p2]))
+        p.setPen(main_pen)
+        p1 = end - QPointF(math.cos(angle0+math.pi/6)*s, math.sin(angle0+math.pi/6)*s)
+        p2 = end - QPointF(math.cos(angle0-math.pi/6)*s, math.sin(angle0-math.pi/6)*s)
         p.setBrush(QBrush(p.pen().color())); p.drawPolygon(QPolygonF([QPointF(end), p1, p2])); p.setBrush(Qt.BrushStyle.NoBrush)
 
     def mousePressEvent(self, event):
@@ -610,7 +799,8 @@ class SnippingWindow(QWidget):
             else: self.close_all()
             return
         
-        if self.toolbar.isVisible() and self.toolbar.geometry().contains(self.mapToGlobal(event.pos())): return
+        # V105: 本地坐标比较 (原 mapToGlobal 与本地 geometry() 比较在窗口原点非 0,0 时永远不成立)
+        if self.toolbar.isVisible() and self.toolbar.geometry().contains(event.pos()): return
 
         if self.has_selected and self.draw_mode:
             if self.draw_mode == 'text':
@@ -640,7 +830,10 @@ class SnippingWindow(QWidget):
         elif self.is_selecting:
             self.is_selecting = False; self.has_selected = True; self.end = event.pos()
             rect = QRect(self.begin, self.end).normalized()
-            if rect.width() < 10: self.has_selected = False
+            # V106: 选区自动钳制到显示器联合区域, 避免把包围盒空隙(无显示器区域)截进图里
+            if hasattr(self, '_monitor_union'):
+                rect = rect.intersected(self._monitor_union)
+            if rect.width() < 10 or rect.height() < 10: self.has_selected = False
             else: self.show_toolbar(rect)
             self.update()
 
@@ -649,29 +842,51 @@ class SnippingWindow(QWidget):
             self.drawings.append({'type':'text', 'text':self.active_input.text(), 'point':self.active_input.pos()+QPoint(0, self.active_input.height()-8), 'color':self.active_input.color, 'size':self.active_input.font_size})
             self.active_input.deleteLater(); self.active_input = None; self.update()
 
-    # 【微创修复 2】: 智能计算工具栏位置，如果下方越界，自动翻到上方
+    # V107: 工具栏定位重写 — 优先级: 选区下方 → 选区上方 → 选区内侧顶部
+    # 每个候选都必须满足: (1) 完全在窗口内 (2) 不落在无显示器空隙带(短屏下方没有屏幕)
     def show_toolbar(self, rect):
         self.toolbar.adjustSize()
-        x = rect.right() - self.toolbar.width()
-        y = rect.bottom() + 10
-        
-        # 边界检测：如果放在下方超出了屏幕高度
-        if y + self.toolbar.height() > self.height(): 
-            y = rect.top() - self.toolbar.height() - 10  # 挪到选区正上方
-            
-            # 如果上方也超出了屏幕 (比如全屏截图)
-            if y < 0:
-                y = rect.top() + 10  # 贴在选区内侧顶部
-                
-        if x < 0: x = 0
+        w, h = self.toolbar.width(), self.toolbar.height()
+
+        def ok(x, y):
+            if x < 0 or y < 0 or x + w > self.width() or y + h > self.height():
+                return False
+            return not self._toolbar_in_gap(x, y)
+
+        x = min(max(rect.right() - w, 0), max(0, self.width() - w))
+        y = rect.bottom() + 10                      # 1) 选区下方
+        if not ok(x, y):
+            y = rect.top() - h - 10                 # 2) 选区上方(靠近屏幕底部时自动翻上来)
+            if not ok(x, y):
+                y = rect.top() + 10                 # 3) 选区内侧顶部
+                if not ok(x, y):
+                    y = max(0, min(rect.top() + 10, self.height() - h))  # 兜底: 窗口内
         self.toolbar.move(x, y); self.toolbar.show()
+
+    def _toolbar_in_gap(self, x, y):
+        """工具栏中心点不在任何真实显示器区域内 → 落在空隙带"""
+        if not hasattr(self, '_monitor_plan'):
+            return False
+        center = QPoint(x + self.toolbar.width() // 2, y + self.toolbar.height() // 2)
+        for geo, dpr, mon in self._monitor_plan:
+            r = QRect(geo.x() - self.virtual_geo.x(), geo.y() - self.virtual_geo.y(),
+                      geo.width(), geo.height())
+            if r.contains(center):
+                return False
+        return True
 
     def finish_capture(self):
         if self.active_input: self.commit_text()
         rect = QRect(self.begin, self.end).normalized()
-        if rect.width() > 0:
-            comm.show_toast.emit(rect.right(), rect.top())
-            self._do_save_sync(rect)
+        # V106: 双保险钳制到显示器联合区域
+        if hasattr(self, '_monitor_union'):
+            rect = rect.intersected(self._monitor_union)
+        if rect.width() > 0 and rect.height() > 0:
+            path = self._do_save_sync(rect)
+            # V105: 窗口本地坐标 == 虚拟桌面坐标, 弹 toast 需换算回全局屏幕坐标
+            gx = rect.right() + self.virtual_geo.x()
+            gy = rect.top() + self.virtual_geo.y()
+            comm.show_toast.emit(gx, gy, path or "\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f")
         self.close_all()
 
     def _do_save_sync(self, rect):
@@ -683,6 +898,9 @@ class SnippingWindow(QWidget):
             source_rect = QRect(sx, sy, sw, sh)
 
             cropped_raw = self.full_screenshot.copy(source_rect)
+            if cropped_raw.isNull() or cropped_raw.width() <= 0 or cropped_raw.height() <= 0:
+                config_mgr.log(f"[Clipboard] Crop failed: src={source_rect}, shot={self.full_screenshot.size()}")
+                return None
 
             if self.drawings:
                 canvas = QPixmap(cropped_raw.size())
@@ -701,15 +919,39 @@ class SnippingWindow(QWidget):
             else:
                 img_to_save = cropped_raw
 
-            # 优先 Qt 剪贴板 (睡眠唤醒后比 win32clipboard 稳定)
+            # 保存为高清 PNG 文件 (原生分辨率)
+            saved_path = None
             try:
-                QApplication.clipboard().setPixmap(img_to_save)
-                config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via Qt)")
-                return
-            except Exception as e1:
-                config_mgr.log(f"[Clipboard] Qt fallback failed: {e1}")
+                save_dir = config.get_screenshot_dir()
+                os.makedirs(save_dir, exist_ok=True)
+                fname = f"Mouse4_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
+                fpath = os.path.join(save_dir, fname)
+                img_to_save.save(fpath, "PNG")
+                saved_path = fpath
+                config_mgr.log(f"[File] Saved {sw}x{sh} -> {fpath}")
+            except Exception as fe:
+                config_mgr.log(f"[File] Save failed: {fe}")
 
-            # Qt 失败后再试 win32 DIB 方式 (带重试)
+            # 2) 复制到剪贴板 (优先 Qt, DIB 重试兜底)
+            self._copy_to_clipboard(img_to_save, sw, sh)
+
+            return saved_path
+
+        except Exception as e:
+            config_mgr.log(f"[Clipboard] Error: {e}")
+            return None
+
+    def _copy_to_clipboard(self, img_to_save, sw, sh):
+        # 优先 Qt 剪贴板 (睡眠唤醒后比 win32clipboard 稳定)
+        try:
+            QApplication.clipboard().setPixmap(img_to_save)
+            config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via Qt)")
+            return True
+        except Exception as e1:
+            config_mgr.log(f"[Clipboard] Qt fallback failed: {e1}")
+
+        # Qt 失败后再试 win32 DIB 方式 (带重试)
+        try:
             buf_png = BytesIO()
             img_to_save.save(buf_png, "PNG")
             buf_png.seek(0)
@@ -726,19 +968,21 @@ class SnippingWindow(QWidget):
                     win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
                     win32clipboard.CloseClipboard()
                     config_mgr.log(f"[Clipboard] Saved {sw}x{sh} (via PIL/DIB attempt {attempt+1})")
-                    return
+                    return True
                 except Exception as e2:
                     config_mgr.log(f"[Clipboard] DIB attempt {attempt+1} failed: {e2}")
                     time.sleep(0.2)
                     try: win32clipboard.CloseClipboard()
                     except: pass
+        except Exception as e3:
+            config_mgr.log(f"[Clipboard] DIB prepare failed: {e3}")
 
-            # 全部失败，最后再试一次 Qt
-            try: QApplication.clipboard().setPixmap(img_to_save)
-            except: pass
-
-        except Exception as e:
-            config_mgr.log(f"[Clipboard] Error: {e}")
+        # 全部失败，最后再试一次 Qt
+        try:
+            QApplication.clipboard().setPixmap(img_to_save)
+            return True
+        except: pass
+        return False
 
     def close_all(self):
         close_all_windows()
@@ -774,10 +1018,30 @@ class RegistryManager:
 reg_manager = RegistryManager()
 tray_icon = None
 
+def _warmup_capture():
+    """启动后预热屏幕捕获后端(mss/显卡DC/Qt渲染), 消除首次截图的迟滞感"""
+    try:
+        t0 = time.time()
+        with mss.mss() as sct:
+            sct.grab(sct.monitors[0])
+        dt = (time.time() - t0) * 1000
+        config_mgr.log(f"[Warmup] pre-grabbed screen in {dt:.0f}ms")
+    except Exception as e:
+        config_mgr.log(f"[Warmup] failed: {e}")
+
 def do_show_windows():
+    config_mgr.log(f"[Shot] trigger at {time.strftime('%H:%M:%S')}")
+    t0 = time.time()
     if active_windows: close_all_windows(); return
+    # V105: 单窗口覆盖整个虚拟桌面(所有显示器 geometry 并集), 本地坐标 == 虚拟桌面坐标
+    vg = QRect()
     for screen in QApplication.screens():
-        w = SnippingWindow(screen); w.show(); active_windows.append(w)
+        vg = vg.united(screen.geometry())
+    config_mgr.log(f"[Shot] virtual desktop: ({vg.x()},{vg.y()}) {vg.width()}x{vg.height()} "
+                   f"({len(QApplication.screens())} monitors)")
+    w = SnippingWindow(vg)
+    active_windows.append(w)
+    config_mgr.log(f"[Shot] windows shown in {(time.time()-t0)*1000:.0f}ms")
 
 class SuccessToast(QWidget):
     def __init__(self, text, parent=None):
@@ -785,11 +1049,18 @@ class SuccessToast(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         l = QVBoxLayout(self); lab = QLabel(text); l.addWidget(lab)
-        lab.setStyleSheet("color: #0f0; background: rgba(0,0,0,180); border: 1px solid #0f0; padding: 5px; border-radius: 4px; font-weight: bold;")
+        lab.setStyleSheet(APPLE_THEME['toast_css'])
         self.anim = QPropertyAnimation(self, b"windowOpacity"); self.anim.setDuration(1500)
         self.anim.finished.connect(self.close)
     def show_anim(self, x, y):
         self.move(x, y-30); self.show(); self.anim.setStartValue(1); self.anim.setEndValue(0); self.anim.start()
+
+def _pick_save_dir():
+    from PyQt6.QtWidgets import QFileDialog
+    d = QFileDialog.getExistingDirectory(None, "选择截图保存目录", config.get_screenshot_dir())
+    if d:
+        config_mgr.set('screenshot_dir', d)
+        QMessageBox.information(None, "Info", f"截图将保存到:\n{d}")
 
 def setup_tray(app):
     global tray_icon
@@ -802,6 +1073,7 @@ def setup_tray(app):
     m.addSeparator()
     m.addAction("注册右键菜单", lambda: QMessageBox.information(None, "Info", reg_manager.install()[1]))
     m.addAction("移除右键菜单", lambda: QMessageBox.information(None, "Info", reg_manager.uninstall()[1]))
+    m.addAction("截图保存目录...", lambda: _pick_save_dir())
     m.addSeparator()
     m.addAction("Github", lambda: webbrowser.open(config.github_url))
     m.addAction("退出", app.quit)
@@ -866,6 +1138,11 @@ if __name__ == '__main__':
     threading.Thread(target=watchdog_thread, daemon=True, name="WatchdogThread").start()
     threading.Thread(target=start_mouse_thread, daemon=True, name="MouseHookThread").start()
 
+    # V107: 恢复物理像素模式(重新禁用 Qt 缩放)。
+    # V106 开启缩放后 QScreen::geometry() 返回"物理位置 + DIP 尺寸"的混合坐标,
+    # 导致 DIP 画布拼接错位、左右屏黑屏。物理模式下 geometry 全为物理像素,
+    # 与 mss 完全一致, 逐屏抓取拼接 1:1 对齐。
+    # 进程保持 Per-Monitor V2 感知(-4), 跨屏窗口不会被 Windows 位图拉伸。
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "0"
     os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
     if hasattr(Qt, 'HighDpiScaleFactorRoundingPolicy'):
@@ -878,7 +1155,10 @@ if __name__ == '__main__':
     tray_icon_ref = setup_tray(app)
 
     comm.trigger_screenshot.connect(do_show_windows)
-    comm.show_toast.connect(lambda x,y: SuccessToast("Saved!").show_anim(x,y))
+    comm.show_toast.connect(lambda x,y,t: SuccessToast(t).show_anim(x,y))
+
+    # 预热: 在空闲时先抓一帧, 把 mss/显卡/Qt 渲染管线热好, 用户首次截图不再卡
+    threading.Thread(target=_warmup_capture, daemon=True, name="WarmupThread").start()
 
     # 通知热键线程：QApp 就绪，可以开始 emit 信号了
     hotkey_ready.set()
