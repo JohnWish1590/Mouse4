@@ -30,7 +30,7 @@
 ## 🛠 开发与更新约定（重要）
 
 - **更新直接在本目录进行**：以后所有功能更新、Bug 修复、文档与打包，一律直接在 `D:\SynologyDrive\CODING\Mouse4` 修改，**不再使用任何副本/临时目录**（历史测试副本 Mouse5 已废弃，仅作备份）。
-- **标准流程**：编辑 `main.pyw` → 同步更新 `CHANGELOG.md`、`RELEASE_NOTE_V{版本号}.md`、`README.md` → 在**本目录**重新打包（见「构建」）→ 提交并推送 GitHub。
+- **标准流程**：编辑 `main.pyw` → 同步更新 `CHANGELOG.md`、`RELEASE_NOTE.md`、`README.md` → 在**本目录**重新打包（见「构建」）→ 提交并推送 GitHub。
 - **必须遵守**「📁 目录与源文件规则」中的版本迭代规则：版本号三处同步（docstring / 启动日志 / CHANGELOG）、发布新版本时先存档 `main.V{新版本号}.pyw`、onefile 与 onedir 双版本同出。
 - git 提交/推送由维护者负责；源码修改后工作区保持 dirty 状态供提交，不要自行改动 `.git`。
 
@@ -128,18 +128,20 @@ python main.pyw
 ```
 Mouse4/
 ├── main.pyw              # 当前版本源码（唯一活跃源文件，随版本迭代修改）
-├── main.V40.pyw          # 历史版本快照（只读存档，不参与构建）
-├── main.V47.pyw
-├── main.V54.pyw
-├── main.V61.pyw
-├── main.V66.pyw
+├── 过去版本/             # 历史版本源码快照（只读存档，不参与构建）
+│   ├── main.V40.pyw
+│   ├── main.V47.pyw
+│   ├── main.V54.pyw
+│   ├── main.V61.pyw
+│   ├── main.V66.pyw
+│   └── main.V107.pyw
 ├── mouse4.spec           # PyInstaller 单文件版(onefile) 构建配置
 ├── mouse4_onedir.spec    # PyInstaller 目录版(onedir) 构建配置
 ├── requirements.txt      # 构建/运行依赖清单
 ├── logo.ico              # 托盘图标 / exe 图标资源
 ├── CHANGELOG.md          # 版本变更记录（最新版本在顶部）
 ├── README.md             # 本文档
-├── RELEASE_NOTE_V*.md    # 各版本发布说明（如 RELEASE_NOTE_V107.0.md）
+├── RELEASE_NOTE.md       # 发布说明汇总（V107/V103/V90，最新在最上）
 ├── _diag.py              # 显示器/DPI 诊断脚本（排障用，见下）
 ├── dist/                 # 构建产物：Mouse4.exe（单文件版）+ Mouse4/（目录版）
 └── build/                # PyInstaller 中间产物（可随时删除）
@@ -147,9 +149,9 @@ Mouse4/
 
 **版本迭代规则（务必遵守）**
 1. 当前活跃代码永远在 `main.pyw`。
-2. 发布新版本时，先把当前 `main.pyw` **存档复制**为 `main.V{新版本号}.pyw`（如发布 V108 前：`copy main.pyw main.V108.pyw`），再继续在 `main.pyw` 上开发。快照文件只读，不再修改。
+2. 发布新版本时，先把当前 `main.pyw` **存档复制**为 `main.V{新版本号}.pyw`（如发布 V108 前：`copy main.pyw 过去版本/main.V108.pyw`），再继续在 `main.pyw` 上开发。快照文件只读，不再修改。
 3. 版本号在 **三处同步**：`main.pyw` 头部 docstring、启动日志 `=== Mouse4 Vxxx Started ===`、`CHANGELOG.md` 最新条目。
-4. 每次功能变更必须在 `CHANGELOG.md` 顶部新增条目（格式：`## [V版本号] - 日期 (简述)`，含 Added / Fixed / Changed / Root Cause），并撰写对应 `RELEASE_NOTE_V{版本号}.md` 发布说明。
+4. 每次功能变更必须在 `CHANGELOG.md` 顶部新增条目（格式：`## [V版本号] - 日期 (简述)`，含 Added / Fixed / Changed / Root Cause），并同步更新 `RELEASE_NOTE.md` 对应版本段落（汇总发布说明，最新在最上）。
 5. 同一版本必须同时产出 onefile 与 onedir 两种构建（同源，行为一致）。
 6. 打包产物 `dist/`、`build/`、`*.spec` 已被 `.gitignore` 忽略，不提交 git；git 只跟踪源码与文档。
 
