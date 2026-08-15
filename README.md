@@ -128,7 +128,7 @@ python main.pyw
 ```
 Mouse4/
 ├── main.pyw              # 当前版本源码（唯一活跃源文件，随版本迭代修改）
-├── 过去版本/             # 历史版本源码快照（只读存档，不参与构建）
+├── archive/              # 历史版本源码快照（只读存档，不参与构建）
 │   ├── main.V40.pyw
 │   ├── main.V47.pyw
 │   ├── main.V54.pyw
@@ -149,7 +149,7 @@ Mouse4/
 
 **版本迭代规则（务必遵守）**
 1. 当前活跃代码永远在 `main.pyw`。
-2. 发布新版本时，先把当前 `main.pyw` **存档复制**为 `main.V{新版本号}.pyw`（如发布 V108 前：`copy main.pyw 过去版本/main.V108.pyw`），再继续在 `main.pyw` 上开发。快照文件只读，不再修改。
+2. 发布新版本时，先把当前 `main.pyw` **存档复制**为 `main.V{新版本号}.pyw`（如发布 V108 前：`copy main.pyw archive/main.V108.pyw`），再继续在 `main.pyw` 上开发。快照文件只读，不再修改。
 3. 版本号在 **三处同步**：`main.pyw` 头部 docstring、启动日志 `=== Mouse4 Vxxx Started ===`、`CHANGELOG.md` 最新条目。
 4. 每次功能变更必须在 `CHANGELOG.md` 顶部新增条目（格式：`## [V版本号] - 日期 (简述)`，含 Added / Fixed / Changed / Root Cause），并同步更新 `RELEASE_NOTE.md` 对应版本段落（汇总发布说明，最新在最上）。
 5. 同一版本必须同时产出 onefile 与 onedir 两种构建（同源，行为一致）。
