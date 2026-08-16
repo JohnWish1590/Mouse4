@@ -173,6 +173,14 @@ python _diag.py
 
 ---
 
-📬 反馈：GitHub 主页见托盘菜单（[JohnWish1590/Mouse4](https://github.com/JohnWish1590/Mouse4)）。Created with ❤️ by JohnWish
+## 仓库链接
+
+- 📦 源码 / Issues / Releases: [https://github.com/JohnWish1590/Mouse4](https://github.com/JohnWish1590/Mouse4)
+- 🦕 问题反馈: [GitHub Issues](https://github.com/JohnWish1590/Mouse4/issues)
+- 📝 变更历史: [CHANGELOG.md](CHANGELOG.md)
+- 🚀 发布说明: [RELEASE_NOTE.md](RELEASE_NOTE.md)
+- ⚡ 快速开始（部署细节）: [docs/QUICKSTART.md](docs/QUICKSTART.md)
+- 🔒 隐私政策: [PRIVACY.md](PRIVACY.md)
+- 🏪 上架清单（未来）: [STORE_GUIDE.md](STORE_GUIDE.md)
 
 Socials: @下一站澳门. DM for inquiries.
