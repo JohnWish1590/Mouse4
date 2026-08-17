@@ -2,6 +2,22 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
+## [V107.1] - 2026-08-17 (截图触发残留修复 + 自动保存修复 + 14天自动清理)
+### Fixed
+- **截图框被系统粘贴板抢焦点后误关闭**: `do_show_windows()` 原 toggle 逻辑
+  `if active_windows: close_all_windows(); return` 在系统粘贴板(Win+V)抢走前台焦点后，
+  SnippingWindow 已在背后弹出(active_windows 残留非空)，用户看不到再按一次即命中关闭分支、
+  直接 return，截图框永远不出现。改为 `if active_windows: close_all_windows()`
+  (每次按都先关旧的、再开新的)，消除误关。
+- **截图自动保存到磁盘失败**: `GlobalConfig.screenshot_dir` 是 @property，
+  代码误写成方法调用 `config.get_screenshot_dir()` 抛 AttributeError，保存文件一直失败、
+  只剩剪贴板可用。两处改为 `config.screenshot_dir`(自动保存 + 选目录对话框)。
+### Added
+- **截图自动清理**: 新增 `cleanup_old_screenshots(keep_days=14)`，扫描保存目录、
+  解析文件名时间戳、删除超过 14 天的 `Mouse4_*.png`；每天最多执行一次。
+  触发点: 截图保存后 + 程序启动时后台线程。
+> 注: 本次 3 个 commit 尚未在 `main.pyw` 内升级版本号(仍显示 V107)，正式发布时统一升为 V107.1。
+
 ## [V107.0] - 2026-08-15 (物理像素逐屏抓取 + 工具栏定位重写)
 ### 📦 发布物（本次双版本 + 品牌回归 Mouse4）
 - **品牌回归**: 项目名从开发代号 Mouse5 统一回归 **Mouse4**——exe 名、打包 spec（`mouse4.spec` / `mouse4_onedir.spec`）、截图文件名前缀（`Mouse4_*.png`）、默认截图目录（`图片\Mouse4Captures`）全部改为 Mouse4*。
