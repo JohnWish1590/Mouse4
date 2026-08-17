@@ -932,6 +932,9 @@ class SnippingWindow(QWidget):
             except Exception as fe:
                 config_mgr.log(f"[File] Save failed: {fe}")
 
+            # 自动清理超过 14 天的旧截图（每天最多一次）
+            cleanup_old_screenshots()
+
             # 2) 复制到剪贴板 (优先 Qt, DIB 重试兜底)
             self._copy_to_clipboard(img_to_save, sw, sh)
 
@@ -1017,6 +1020,40 @@ class RegistryManager:
 
 reg_manager = RegistryManager()
 tray_icon = None
+
+_last_cleanup_date = None
+
+def cleanup_old_screenshots(keep_days=14):
+    """删除截图保存目录中超过 keep_days 天的 Mouse4_*.png（每天最多执行一次）"""
+    global _last_cleanup_date
+    now = datetime.datetime.now()
+    if _last_cleanup_date and (now - _last_cleanup_date).days < 1:
+        return
+    _last_cleanup_date = now
+    try:
+        save_dir = config.screenshot_dir
+        if not os.path.isdir(save_dir):
+            return
+        cutoff = now - datetime.timedelta(days=keep_days)
+        removed = 0
+        for name in os.listdir(save_dir):
+            if not (name.startswith('Mouse4_') and name.endswith('.png')):
+                continue
+            stem = name[len('Mouse4_'):-len('.png')]
+            try:
+                ft = datetime.datetime.strptime(stem, '%Y%m%d_%H%M%S')
+            except ValueError:
+                continue
+            if ft < cutoff:
+                try:
+                    os.remove(os.path.join(save_dir, name))
+                    removed += 1
+                except OSError:
+                    pass
+        if removed:
+            config_mgr.log(f"[Cleanup] removed {removed} old screenshot(s) (> {keep_days} days)")
+    except Exception as e:
+        config_mgr.log(f"[Cleanup] failed: {e}")
 
 def _warmup_capture():
     """启动后预热屏幕捕获后端(mss/显卡DC/Qt渲染), 消除首次截图的迟滞感"""
@@ -1159,6 +1196,9 @@ if __name__ == '__main__':
 
     # 预热: 在空闲时先抓一帧, 把 mss/显卡/Qt 渲染管线热好, 用户首次截图不再卡
     threading.Thread(target=_warmup_capture, daemon=True, name="WarmupThread").start()
+
+    # 启动时清理一次超过 14 天的旧截图
+    threading.Thread(target=cleanup_old_screenshots, daemon=True, name="CleanupThread").start()
 
     # 通知热键线程：QApp 就绪，可以开始 emit 信号了
     hotkey_ready.set()
