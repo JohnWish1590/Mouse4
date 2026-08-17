@@ -922,7 +922,7 @@ class SnippingWindow(QWidget):
             # 保存为高清 PNG 文件 (原生分辨率)
             saved_path = None
             try:
-                save_dir = config.get_screenshot_dir()
+                save_dir = config.screenshot_dir
                 os.makedirs(save_dir, exist_ok=True)
                 fname = f"Mouse4_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
                 fpath = os.path.join(save_dir, fname)
@@ -1057,7 +1057,7 @@ class SuccessToast(QWidget):
 
 def _pick_save_dir():
     from PyQt6.QtWidgets import QFileDialog
-    d = QFileDialog.getExistingDirectory(None, "选择截图保存目录", config.get_screenshot_dir())
+    d = QFileDialog.getExistingDirectory(None, "选择截图保存目录", config.screenshot_dir)
     if d:
         config_mgr.set('screenshot_dir', d)
         QMessageBox.information(None, "Info", f"截图将保存到:\n{d}")
