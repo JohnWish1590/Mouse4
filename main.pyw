@@ -1032,7 +1032,7 @@ def _warmup_capture():
 def do_show_windows():
     config_mgr.log(f"[Shot] trigger at {time.strftime('%H:%M:%S')}")
     t0 = time.time()
-    if active_windows: close_all_windows(); return
+    if active_windows: close_all_windows()
     # V105: 单窗口覆盖整个虚拟桌面(所有显示器 geometry 并集), 本地坐标 == 虚拟桌面坐标
     vg = QRect()
     for screen in QApplication.screens():
