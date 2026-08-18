@@ -1,7 +1,7 @@
 # 交接文档：Mouse4（Windows 桌面截图工具）
 
 > **用途**：本文档供**接手本项目的下一位 AI / 开发者**阅读，目标是「无需追问即可继续开发、测试、打包」。
-> **整理时间**：2026-08-17 ｜ **整理人**：WorkBuddy（嘎嘎姑）｜ **当前版本**：V107.0（今日 3 个 commit 待归入下一版本 V107.1）
+> **整理时间**：2026-08-17 ｜ **整理人**：WorkBuddy（嘎嘎姑）｜ **当前版本**：V107.0（今日全部改动待归入下一版本 V107.1）
 > **配套文档**：`README.md`（给用户的使用说明）、`CHANGELOG.md`（版本历史）、`RELEASE_NOTE.md`（发布说明）、`PRIVACY.md`、`STORE_GUIDE.md`。本文档是「工程交接视角」，与前几份互补。
 
 ---
@@ -12,7 +12,7 @@
 - **当前版本**：`V107.0`（物理像素逐屏抓取跨屏重构版）。
 - **GitHub 仓库（public）**：`https://github.com/JohnWish1590/Mouse4`
 - **本地路径（canonical）**：`D:\SynologyDrive\CODING\Mouse4\`（NAS 盘，绝对稳定、自带备份）。
-- **完成度**：功能完整、可用。今日修复 2 个 bug + 新增 1 个功能，已重新打包双版本。
+- **完成度**：功能完整、可用。累计修复 3 个 bug（含 toast 文案误显）+ 新增 1 功能（14 天清理）+ 1 项改进（毫秒命名）；toast 与毫秒改动待本次提交并重新打包。
 - **⚠️ 关键事实**：`dist\`、`build\`、`*.spec` 已被 `.gitignore` 忽略，**不提交 git**；git 只跟踪源码与文档。打包产物需本地重新生成。
 
 ---
@@ -40,9 +40,14 @@
 - onedir（日常推荐）：`dist\Mouse4\Mouse4.exe`（引导 6.4MB + `_internal\`）
 - onefile（便携）：`dist\Mouse4.exe`（约 58MB）
 
+**⑤ 截图命名精确到毫秒 + toast 文案修复**（代码已改，待本次提交 / 打包）
+- **毫秒命名**：`_do_save_sync` 的 `fname` 由 `Mouse4_YYYYMMDD_HHMMSS.png` 改为 `Mouse4_YYYYMMDD_HHMMSS_mmm.png`（`now.microsecond // 1000`，3 位毫秒，如 `Mouse4_20260817_083000_123.png`），杜绝同秒连截重名覆盖。
+- **同步清理解析**：`cleanup_old_screenshots` 的 `strptime` 由 `%Y%m%d_%H%M%S` 改为 `%Y%m%d_%H%M%S_%f`，保证 14 天自动清理仍能正确解析新格式（已写往返测试验证）。
+- **toast 文案修复**：右上角成功提示由误显完整保存路径改回固定 `"Saved!"`（V66 原始文案，路径信息由日志承担）。
+
 ### ⏳ 待办（下次要做的）
 
-1. **【用户已确认，下次一起做】截图命名改毫秒级**：当前命名 `Mouse4_YYYYMMDD_HHMMSS.png` 精确到秒，同一秒内连截两张会**重名覆盖**。改成 `Mouse4_YYYYMMDD_HHMMSS_mmm.png`（毫秒）。注意：`cleanup_old_screenshots` 是按文件名解析时间的（`strptime('%Y%m%d_%H%M%S')`），改命名格式后**必须同步更新解析逻辑**（见 `main.pyw` `cleanup_old_screenshots` 与 `_do_save_sync` 的 `fname`）。
+1. ~~**【已完成】截图命名改毫秒级 + toast 文案**~~：见上方「✅ 已完成 ⑤」。命名已改 `Mouse4_YYYYMMDD_HHMMSS_mmm.png` 并同步清理解析；toast 文案已改回 `"Saved!"`。待本次提交并重新打包双版本后生效。
 2. **用户重启 exe 验证**：本次 3 个改动需重启 `dist\Mouse4\Mouse4.exe` 生效（旧进程打包时已被关闭）。
 3. （可选）验证自动清理确实工作：可在 `图片\Mouse4Captures` 放几个旧的 `Mouse4_*.png`，启动后看日志 `[Cleanup] removed N old screenshot(s)`。
 

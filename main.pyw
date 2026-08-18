@@ -882,11 +882,11 @@ class SnippingWindow(QWidget):
         if hasattr(self, '_monitor_union'):
             rect = rect.intersected(self._monitor_union)
         if rect.width() > 0 and rect.height() > 0:
-            path = self._do_save_sync(rect)
+            self._do_save_sync(rect)
             # V105: 窗口本地坐标 == 虚拟桌面坐标, 弹 toast 需换算回全局屏幕坐标
             gx = rect.right() + self.virtual_geo.x()
             gy = rect.top() + self.virtual_geo.y()
-            comm.show_toast.emit(gx, gy, path or "\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f")
+            comm.show_toast.emit(gx, gy, "Saved!")
         self.close_all()
 
     def _do_save_sync(self, rect):
@@ -924,7 +924,8 @@ class SnippingWindow(QWidget):
             try:
                 save_dir = config.screenshot_dir
                 os.makedirs(save_dir, exist_ok=True)
-                fname = f"Mouse4_{datetime.datetime.now():%Y%m%d_%H%M%S}.png"
+                now = datetime.datetime.now()
+                fname = f"Mouse4_{now:%Y%m%d_%H%M%S}_{now.microsecond // 1000:03d}.png"
                 fpath = os.path.join(save_dir, fname)
                 img_to_save.save(fpath, "PNG")
                 saved_path = fpath
@@ -1041,7 +1042,7 @@ def cleanup_old_screenshots(keep_days=14):
                 continue
             stem = name[len('Mouse4_'):-len('.png')]
             try:
-                ft = datetime.datetime.strptime(stem, '%Y%m%d_%H%M%S')
+                ft = datetime.datetime.strptime(stem, '%Y%m%d_%H%M%S_%f')
             except ValueError:
                 continue
             if ft < cutoff:

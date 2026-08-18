@@ -2,7 +2,7 @@
 
 All notable changes to the Mouse4 project will be documented in this file.
 
-## [V107.1] - 2026-08-17 (截图触发残留修复 + 自动保存修复 + 14天自动清理)
+## [V107.1] - 2026-08-17 (截图触发残留修复 + 自动保存修复 + 14天自动清理 + 毫秒命名 + toast 文案)
 ### Fixed
 - **截图框被系统粘贴板抢焦点后误关闭**: `do_show_windows()` 原 toggle 逻辑
   `if active_windows: close_all_windows(); return` 在系统粘贴板(Win+V)抢走前台焦点后，
@@ -11,12 +11,19 @@ All notable changes to the Mouse4 project will be documented in this file.
   (每次按都先关旧的、再开新的)，消除误关。
 - **截图自动保存到磁盘失败**: `GlobalConfig.screenshot_dir` 是 @property，
   代码误写成方法调用 `config.get_screenshot_dir()` 抛 AttributeError，保存文件一直失败、
-  只剩剪贴板可用。两处改为 `config.screenshot_dir`(自动保存 + 选目录对话框)。
+  只剩剪贴板可用。  两处改为 `config.screenshot_dir`(自动保存 + 选目录对话框)。
+- **截图成功提示误显保存路径**: 右上角 SuccessToast 原固定文案 "Saved!" 被误改为显示完整保存路径，
+  用户看不到简洁的成功提示。已改回固定文案 "Saved!"(路径信息由日志承担，不再进 toast)。
 ### Added
 - **截图自动清理**: 新增 `cleanup_old_screenshots(keep_days=14)`，扫描保存目录、
   解析文件名时间戳、删除超过 14 天的 `Mouse4_*.png`；每天最多执行一次。
   触发点: 截图保存后 + 程序启动时后台线程。
-> 注: 本次 3 个 commit 尚未在 `main.pyw` 内升级版本号(仍显示 V107)，正式发布时统一升为 V107.1。
+### Changed
+- **截图文件名精确到毫秒**: 原 `Mouse4_YYYYMMDD_HHMMSS.png` 精确到秒，高频截图时同一秒连截两张会**重名覆盖**。
+  改为 `Mouse4_YYYYMMDD_HHMMSS_mmm.png`(3 位毫秒, 如 `Mouse4_20260817_083000_123.png`), 基本杜绝重名。
+  同步更新 `cleanup_old_screenshots` 的时间解析格式(`strptime` 由 `%Y%m%d_%H%M%S` 改为 `%Y%m%d_%H%M%S_%f`),
+  保证 14 天自动清理仍能正确解析新格式文件名。
+> 注: 本次全部改动尚未在 `main.pyw` 内升级版本号(仍显示 V107)，正式发布时统一升为 V107.1。
 
 ## [V107.0] - 2026-08-15 (物理像素逐屏抓取 + 工具栏定位重写)
 ### 📦 发布物（本次双版本 + 品牌回归 Mouse4）
