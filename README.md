@@ -7,6 +7,7 @@ SnipNow is a lightweight Windows screenshot tool: capture any region of your scr
 ## Highlights
 
 - ⚡ **Instant capture** — hotkey → drag → done. The screenshot is already on your clipboard.
+- 📌 **Pin to desktop** — keep an important capture visible while you work; drag, zoom, copy, save, or close it anytime.
 - 🪶 **Featherweight** — small footprint, launches in milliseconds, stays out of your way in the tray.
 - 🖥️ **Multi-monitor aware** — correct DPI handling across mixed-resolution setups.
 - 🗂️ **Auto-saved captures** — every shot is filed into a dated capture folder with a timestamped name.
