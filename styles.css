@@ -59,8 +59,19 @@ h1 strong, h2 em { color: var(--secondary); font-style: normal; }
 .window-title img { width: 18px; height: 18px; border-radius: 5px; }
 .window-status { display: flex; align-items: center; gap: 6px; }
 .window-status i { width: 7px; height: 7px; border-radius: 50%; background: #56c98b; }
-.desktop-scene { position: relative; height: 360px; overflow: hidden; background: linear-gradient(135deg, #14203c, #29356a); }
-.desktop-scene::before { content: ""; position: absolute; inset: 0; opacity: .24; background-image: linear-gradient(rgba(255,255,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.12) 1px, transparent 1px); background-size: 27px 27px; }
+.desktop-scene { position: relative; height: 360px; overflow: hidden; background: #14203c; }
+.desktop-scene::before { content: ""; position: absolute; z-index: 4; inset: 0; pointer-events: none; box-shadow: inset 0 0 70px rgba(5, 8, 20, .2); }
+.demo-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; animation: snip-demo-frame 12s infinite; }
+.demo-frame-base { animation-delay: 0s; }
+.demo-frame-selection { animation-delay: 4s; }
+.demo-frame-pinned { animation-delay: 8s; }
+.demo-caption { position: absolute; z-index: 5; left: 18px; bottom: 17px; padding: 7px 10px; border-radius: 6px; color: #fff; background: rgba(20, 24, 39, .82); font-size: 11px; font-weight: 800; letter-spacing: .01em; opacity: 0; animation: snip-demo-caption 12s infinite; }
+.demo-caption-base { animation-delay: 0s; }
+.demo-caption-selection { animation-delay: 4s; }
+.demo-caption-pinned { animation-delay: 8s; }
+@keyframes snip-demo-frame { 0%, 23% { opacity: 1; } 30%, 100% { opacity: 0; } }
+@keyframes snip-demo-caption { 0%, 23% { opacity: 1; transform: translateY(0); } 30%, 100% { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .demo-frame, .demo-caption { animation: none; }.demo-frame { display: none; }.demo-frame-pinned, .demo-caption-pinned { display: block; opacity: 1; }.demo-caption-pinned { transform: none; } }
 .scene-window { position: absolute; border-radius: 10px; background: rgba(255,255,255,.87); box-shadow: 0 18px 38px rgba(0,0,0,.2); }
 .scene-window-back { inset: 52px 32px 74px 62px; opacity: .45; transform: rotate(-7deg); }
 .scene-window-front { inset: 82px 76px 45px 86px; padding: 30px; }
