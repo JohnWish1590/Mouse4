@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="SnipNow is a simple Windows screenshot tool with desktop pinning, instant clipboard capture, and automatic file organisation." />
+    <meta name="description" content="SnipNow is a simple Windows screenshot tool with desktop pinning, instant clipboard capture, automatic file organisation, and quick folder navigation." />
     <link rel="icon" href="logo.ico" />
     <link rel="canonical" href="https://johnwish1590.github.io/SnipNow/" />
     <meta name="google-site-verification" content="36yzbSNBCR65D-Ej9KUfR2fVYT5IugqYUZBBNIY7XrA" />
     <meta name="msvalidate.01" content="FC70323A0413F729753F48D61BF6EE2E" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="SnipNow — Simple screenshots. Zero clutter." />
-    <meta property="og:description" content="Capture a region, pin it to your desktop, and keep working with a lightweight Windows screenshot tool." />
+    <meta property="og:description" content="Capture a region, pin it to your desktop, and move back through folders with a lightweight Windows screenshot tool." />
     <meta property="og:url" content="https://johnwish1590.github.io/SnipNow/" />
     <meta property="og:image" content="https://johnwish1590.github.io/SnipNow/logo.ico" />
     <title>SnipNow — Simple screenshots. Zero clutter.</title>
@@ -22,7 +22,7 @@
         "name": "SnipNow",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Windows",
-        "description": "A lightweight Windows screenshot tool for capturing, copying, saving, and pinning screenshots to the desktop.",
+        "description": "A lightweight Windows screenshot tool for capturing, copying, saving, pinning screenshots to the desktop, and navigating back through folders.",
         "url": "https://johnwish1590.github.io/SnipNow/",
         "offers": {
           "@type": "Offer",
@@ -93,10 +93,11 @@
         </div>
         <div class="feature-grid">
           <article class="feature-card feature-card-pin"><b>01</b><h3>Pin to desktop</h3><p>Keep an important screenshot visible while you work. Drag it, zoom it, or close it when you are done.</p></article>
-          <article class="feature-card"><b>02</b><h3>Clipboard first</h3><p>Your capture is ready to paste the moment you release the mouse.</p></article>
-          <article class="feature-card"><b>03</b><h3>Files stay organised</h3><p>Every screenshot is saved automatically in a dated capture folder.</p></article>
+          <article class="feature-card"><b>02</b><h3>Clipboard first</h3><p>Confirm a capture and it is ready to paste while the PNG is saved locally.</p></article>
+          <article class="feature-card"><b>03</b><h3>Files stay organised</h3><p>Every screenshot is saved locally as a timestamped PNG file.</p></article>
           <article class="feature-card"><b>04</b><h3>Every screen</h3><p>Reliable region selection across mixed-resolution, multi-monitor desktops.</p></article>
           <article class="feature-card"><b>05</b><h3>Quiet by default</h3><p>A small tray app that launches quickly and never gets in your way.</p></article>
+          <article class="feature-card"><b>06</b><h3>Quick folder navigation</h3><p>Double-click empty space in File Explorer to go back one folder without reaching for the Back button.</p></article>
         </div>
       </section>
 
@@ -117,14 +118,23 @@
           <p class="eyebrow"><span></span> Simple, honest pricing</p>
           <h2>One purchase.<br /><em>Up to three computers.</em></h2>
           <p>Try every feature for 14 days. When you are ready, pay once and keep SnipNow for the life of the product.</p>
-          <div class="payment-note"><strong>How delivery works</strong><span>Pay with Wise or PayPal. After we confirm your payment, we email your license key.</span></div>
+          <div class="payment-note"><strong>How delivery works</strong><span>Pay with Stripe or PayPal. After we confirm your payment, we email your license key to the address used at checkout.</span></div>
         </div>
         <div class="price-card">
           <div class="price-card-top"><span>SnipNow Lifetime License</span><small>Windows</small></div>
           <div class="price"><sup>$</sup>4<span>.99</span></div>
           <p>One-time payment · No recurring charges</p>
-          <a class="button button-primary" href="mailto:johnwish1590@hotmail.com?subject=SnipNow%20Lifetime%20License">Payment instructions <span>→</span></a>
-          <small class="price-footnote">Payment instructions are sent by email after you contact support.</small>
+          <div class="payment-options">
+            <div class="payment-option">
+              <div class="payment-option-copy"><strong>Pay with Stripe</strong><small>Fixed price · Card or wallet</small><a class="button" href="https://buy.stripe.com/5kQ4gy9zy5qmc1Pe5X4sE00" target="_blank" rel="noopener">Open Stripe checkout <span>→</span></a></div>
+              <img class="payment-qr" src="payment/stripe-payment-qr.png" alt="Scan to pay $4.99 with Stripe" />
+            </div>
+            <div class="payment-option">
+              <div class="payment-option-copy"><strong>Pay with PayPal</strong><small>PayPal.Me · $4.99 pre-filled</small><a class="button" href="https://paypal.me/johnwish1590/4.99USD" target="_blank" rel="noopener">Open PayPal checkout <span>→</span></a></div>
+              <img class="payment-qr" src="payment/paypal-payment-qr.png" alt="Scan to pay $4.99 with PayPal" />
+            </div>
+          </div>
+          <small class="price-footnote">After payment is confirmed, we email your license key. One key activates up to three computers.</small>
         </div>
       </section>
 
@@ -136,6 +146,7 @@
           <details><summary>Do screenshots leave my computer?</summary><p>No. Captures are processed and saved locally by the Windows app.</p></details>
           <details><summary>Do I need an account?</summary><p>No account is required. You enter the license key directly in SnipNow.</p></details>
           <details><summary>Can I keep a screenshot visible?</summary><p>Yes. Use Pin to desktop to keep a capture above other windows while you work.</p></details>
+          <details><summary>Can SnipNow help me move back through folders?</summary><p>Yes. Double-click an empty area in File Explorer to go back one folder. Double-clicking a file or folder keeps its normal Windows behaviour.</p></details>
         </div>
       </section>
     </main>
@@ -143,7 +154,7 @@
     <footer class="site-footer page-width">
       <a class="brand" href="#top"><img src="logo.ico" alt="" /><span>SnipNow</span></a>
       <span>Fast screenshots for Windows.</span>
-      <div class="footer-links"><a href="#pricing">Pricing</a><a href="pin-screenshot-windows.html">Guide</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="mailto:johnwish1590@hotmail.com">Support</a><a href="#top">Back to top ↑</a></div>
+      <div class="footer-links"><a href="#pricing">Pricing</a><a href="pin-screenshot-windows.html">Guide</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="mailto:johnwish1590@hotmail.com">Support</a><a href="https://johnwish1590.github.io/SnipNow/">Official website</a><a href="#top">Back to top ↑</a></div>
     </footer>
 
     <script src="script.js"></script>
