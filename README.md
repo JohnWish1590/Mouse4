@@ -6,7 +6,7 @@ Mouse4 is a small Windows screenshot utility for capturing a region, pinning it 
 
 ## Download
 
-- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.11/Mouse4-Setup-1.0.11.exe)
+- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.12/Mouse4-Setup-1.0.12.exe)
 - [View release notes](https://github.com/JohnWish1590/Mouse4/releases)
 - [Visit the product page](https://johnwish1590.github.io/Mouse4/)
 
