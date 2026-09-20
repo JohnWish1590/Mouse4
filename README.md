@@ -1,14 +1,14 @@
-# SnipNow
+# Mouse4
 
 **Simple screenshots. Zero clutter.**
 
-SnipNow is a small Windows screenshot utility for capturing a region, pinning it above other windows, and continuing your work without a large editor or workspace.
+Mouse4 is a small Windows screenshot utility for capturing a region, pinning it above other windows, and continuing your work without a large editor or workspace.
 
 ## Download
 
-- [Download SnipNow for Windows](https://github.com/JohnWish1590/SnipNow/releases/download/v1.0.10/SnipNow-Setup-1.0.10.exe)
-- [View release notes](https://github.com/JohnWish1590/SnipNow/releases)
-- [Visit the product page](https://johnwish1590.github.io/SnipNow/)
+- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.11/Mouse4-Setup-1.0.11.exe)
+- [View release notes](https://github.com/JohnWish1590/Mouse4/releases)
+- [Visit the product page](https://johnwish1590.github.io/Mouse4/)
 
 The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-time payment. No subscription and no account are required.
 
@@ -24,15 +24,15 @@ The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-t
 
 ## Installation
 
-Download the Windows Setup installer above and run it. SnipNow installs for the current Windows user and does not require administrator rights.
+Download the Windows Setup installer above and run it. Mouse4 installs for the current Windows user and does not require administrator rights.
 
 ## License delivery
 
-After a Stripe or PayPal payment is confirmed, the license key is sent manually to the email address used at checkout. One license key can activate up to three computers.
+After a Stripe or PayPal payment is confirmed, the license key is sent manually to the email address used at checkout. One license key can activate up to three computers. The old `SNIPNOW-` license prefix is retired; current keys begin with `MOUSE4-`.
 
 ## About this repository
 
-This is the public product and release repository for SnipNow. It contains the product page, marketing assets, and downloadable installers. SnipNow is commercial closed-source software; the application source code and private licensing infrastructure are not included.
+This is the public product and release repository for Mouse4. It contains the product page, marketing assets, and downloadable installers. Mouse4 is commercial closed-source software; the application source code and private licensing infrastructure are not included.
 
 ## Support
 

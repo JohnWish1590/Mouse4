@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://johnwish1590.github.io/SnipNow/sitemap.xml
+Sitemap: https://johnwish1590.github.io/Mouse4/sitemap.xml
