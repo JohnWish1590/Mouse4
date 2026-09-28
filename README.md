@@ -6,9 +6,9 @@ Mouse4 is a small Windows screenshot utility for capturing a region, pinning it 
 
 ## Download
 
-- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.19/Mouse4-Setup-1.0.19.exe)
-- [View release notes](https://github.com/JohnWish1590/Mouse4/releases)
-- [Visit the product page](https://johnwish1590.github.io/Mouse4/)
+- [Download the Windows Setup installer](https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.30/Mouse4-Setup-1.0.30.exe)
+- [View release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.0.30)
+- [Visit the Mouse4 product page](https://johnwish1590.github.io/Mouse4/)
 
 The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-time payment. No subscription and no account are required.
 
@@ -17,7 +17,8 @@ The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-t
 - Capture a screen region with a global hotkey.
 - Copy each capture to the clipboard automatically.
 - Save timestamped PNG files locally.
-- Pin a capture above the desktop while you work.
+- Capture long, scrollable pages and stitch them into one image.
+- Pin a capture above other windows while you work.
 - Support multiple monitors, including mixed-resolution displays.
 - Double-click empty space in File Explorer to return to the previous folder.
 - Run quietly from the Windows system tray.
