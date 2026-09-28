@@ -2,6 +2,75 @@
 
 This document records the main product, implementation, release, website, licensing, and testing changes made during the Mouse4 development process. Newer versions are listed first.
 
+## [1.0.30] - 2026-09-28
+
+### Long capture responsiveness
+
+- Load long-capture image-matching components in the background while the capture area is being selected, avoiding a cold-start pause on the first scroll frame.
+- Check the selected viewport every 25ms instead of every 50ms to better keep up with continuous scrolling.
+- Keep the alignment safeguard: if a scroll jump leaves too little overlap to stitch reliably, Mouse4 warns instead of saving an incomplete image.
+
+## [1.0.29] - 2026-09-28
+
+### Larger toolbar help text
+
+- Increased toolbar tooltip text to make each button's purpose easier to read.
+
+## [1.0.28] - 2026-09-28
+
+### Long capture save confirmation
+
+- Show a save-and-copy confirmation after a long capture, matching the normal screenshot workflow.
+
+## [1.0.27] - 2026-09-28
+
+### Long capture alignment
+
+- Improved alignment on pages with fixed sidebars, small animations, or minor visual changes while retaining protection against missing or duplicated content.
+
+## [1.0.26] - 2026-09-28
+
+### Long capture reliability
+
+- Kept the capture mask and toolbar visible while scrolling, fixed missing/overwritten rows, and waited for the final scroll frames before saving.
+- Added desktop and browser regression checks for continuous scrolling, image contents, clipboard, and save confirmation.
+
+## [1.0.25] - 2026-09-28
+
+### Long capture viewport
+
+- Kept the selected page visible beneath the capture overlay and prevented the mask and toolbar from appearing in the saved image.
+
+## [1.0.24] - 2026-09-28
+
+### Long capture overlap checks
+
+- Improved overlap detection and prevented duplicate frames when a page stops scrolling.
+
+## [1.0.23] - 2026-09-28
+
+### Internal code organization
+
+- Separated reusable capture, long-image stitching, pinned-window, and toolbar code into internal modules. Mouse4 remains a single installed app.
+
+## [1.0.22] - 2026-09-28
+
+### Startup fix
+
+- Fixed initialization order so Mouse4 starts normally before Long Capture is used.
+
+## [1.0.21] - 2026-09-28
+
+### Fast scroll reliability
+
+- Improved handling of wheel input arriving while a viewport is being captured.
+
+## [1.0.20] - 2026-09-28
+
+### Long Capture
+
+- Added scrolling-page capture and stitching, with the finished image following the existing copy, save, and pin workflow.
+
 ## [1.0.19] - 2026-09-21
 
 ### Pinned screenshot alignment fix
