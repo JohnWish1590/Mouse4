@@ -14,6 +14,7 @@ Newer versions are listed first. This is the public release history; private lic
 
 - Adds an English customer demo with English captions, an English translation result, and the complete capture workflow.
 - Adds the direct English demo link to the public README.
+- Publishes three English feature articles covering context-preserving capture, Long Capture, and selected-text translation.
 - Keeps application source code, private licensing services, and API credentials out of the public repository.
 
 ## [1.1.21] - 2026-10-04
