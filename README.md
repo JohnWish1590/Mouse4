@@ -10,6 +10,7 @@ Mouse4 is a focused Windows utility for clean region screenshots, long-page capt
 - [Read the v1.1.22 release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.1.22)
 - [Visit the product page](https://johnwish1590.github.io/Mouse4/)
 - [Watch the product demo](https://johnwish1590.github.io/Mouse4/#demo)
+- [Watch the English demo video](https://johnwish1590.github.io/Mouse4/marketing/Mouse4-demo-English.mp4)
 
 The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-time payment. No subscription and no account are required.
 
