@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Mouse4 is a simple Windows screenshot tool for capturing regions and scrolling pages, pinning screenshots, saving locally, and quick folder navigation." />
+    <meta name="description" content="Mouse4 is a focused Windows utility for region capture, long-page screenshots, selected-text translation, local saving, and desktop pinning." />
     <link rel="icon" href="logo.ico" />
     <link rel="canonical" href="https://johnwish1590.github.io/Mouse4/" />
     <meta name="google-site-verification" content="36yzbSNBCR65D-Ej9KUfR2fVYT5IugqYUZBBNIY7XrA" />
     <meta name="msvalidate.01" content="FC70323A0413F729753F48D61BF6EE2E" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Mouse4 - Simple screenshots. Zero clutter." />
-    <meta property="og:description" content="Capture a region or scrolling page, pin it to your desktop, and keep working with a lightweight Windows screenshot tool." />
+    <meta property="og:title" content="Mouse4 - Capture, translate, keep moving." />
+    <meta property="og:description" content="Capture a region or scrolling page, translate selected text, pin the result, and keep working with a lightweight Windows utility." />
     <meta property="og:url" content="https://johnwish1590.github.io/Mouse4/" />
     <meta property="og:image" content="https://johnwish1590.github.io/Mouse4/logo.ico" />
-    <title>Mouse4 - Simple screenshots. Zero clutter.</title>
+    <title>Mouse4 - Capture, translate, keep moving.</title>
     <link rel="stylesheet" href="styles.css" />
     <script type="application/ld+json">
       {
@@ -22,9 +22,9 @@
         "name": "Mouse4",
         "applicationCategory": "UtilitiesApplication",
         "operatingSystem": "Windows",
-        "description": "A lightweight Windows screenshot tool for capturing regions and scrolling pages, copying and saving images, pinning screenshots to the desktop, and navigating back through folders.",
+        "description": "A focused Windows utility for region capture, long-page screenshots, selected-text translation, local saving, desktop pinning, and quick folder navigation.",
         "url": "https://johnwish1590.github.io/Mouse4/",
-        "downloadUrl": "https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.30/Mouse4-Setup-1.0.30.exe",
+        "downloadUrl": "https://github.com/JohnWish1590/Mouse4/releases/download/v1.1.22/Mouse4-Setup-1.1.22.exe",
         "offers": {
           "@type": "Offer",
           "price": "4.99",
@@ -42,27 +42,28 @@
       </a>
       <nav class="nav-links" aria-label="Main navigation">
         <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
         <a href="#how-it-works">How it works</a>
         <a href="#pricing">Pricing</a>
-        <a class="nav-cta" href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.30/Mouse4-Setup-1.0.30.exe">Download <span>&rarr;</span></a>
+        <a class="nav-cta" href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.1.22/Mouse4-Setup-1.1.22.exe">Download <span>&rarr;</span></a>
       </nav>
     </header>
 
     <main id="top">
       <section class="hero page-width">
         <div class="hero-copy">
-          <p class="eyebrow"><span></span> A small Windows utility</p>
-          <h1>Simple screenshots.<br /><strong>Zero clutter.</strong></h1>
+          <p class="eyebrow"><span></span> Capture, translate, keep moving</p>
+          <h1>Keep the work<br /><strong>in front of you.</strong></h1>
           <p class="hero-text">
-            Capture a region or scrolling page, pin it to your desktop, and keep working. Mouse4 gives you the useful parts of a screenshot tool without the extra clutter.
+            Mouse4 keeps the useful parts of a Windows workflow close: clean region capture, long-page stitching, selected-text translation, and a reference you can pin without opening a heavy editor.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.30/Mouse4-Setup-1.0.30.exe">Download free trial <span>&rarr;</span></a>
+            <a class="button button-primary" href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.1.22/Mouse4-Setup-1.1.22.exe">Download free trial <span>&rarr;</span></a>
             <a class="button button-quiet" href="#pricing">Buy for $4.99 <span>&rarr;</span></a>
           </div>
           <div class="hero-release">
-            <span>Mouse4 for Windows &middot; v1.0.30</span>
-            <a href="https://github.com/JohnWish1590/Mouse4/releases/tag/v1.0.30" target="_blank" rel="noopener">View release notes</a>
+            <span>Mouse4 for Windows &middot; v1.1.22</span>
+            <a href="https://github.com/JohnWish1590/Mouse4/releases/tag/v1.1.22" target="_blank" rel="noopener">View release notes</a>
           </div>
           <div class="trial-note"><strong>14-day trial.</strong> Windows setup. No account required.</div>
           <div class="trust-row">
@@ -81,9 +82,11 @@
             <img class="demo-frame demo-frame-base" src="marketing/01-right-desktop.jpg" alt="A clean desktop ready for a capture" />
             <img class="demo-frame demo-frame-selection" src="marketing/03-selection.jpg" alt="A selected screen region in Mouse4" />
             <img class="demo-frame demo-frame-pinned" src="marketing/06-pinned-right.jpg" alt="A screenshot pinned above the desktop" />
+            <img class="demo-frame demo-frame-translation" src="marketing/07-translation.png" alt="Selected text translated in a light floating panel" />
             <span class="demo-caption demo-caption-base">Ready to capture</span>
             <span class="demo-caption demo-caption-selection">Drag a region</span>
             <span class="demo-caption demo-caption-pinned">Pinned to your desktop</span>
+            <span class="demo-caption demo-caption-translation">Translate selected text</span>
           </div>
           <div class="preview-footer"><span>&#8984;</span> Capture it, pin it, keep moving</div>
         </div>
@@ -92,12 +95,13 @@
       <section class="feature-section page-width" id="features">
         <div class="section-heading">
           <p class="eyebrow"><span></span> The useful parts</p>
-          <h2>Capture quickly.<br /><em>Keep moving.</em></h2>
+          <h2>Capture quickly.<br /><em>Keep the context.</em></h2>
         </div>
         <div class="feature-grid feature-grid-primary">
           <article class="feature-card feature-card-pin"><b>01</b><h3>Capture instantly</h3><p>Press the hotkey and drag a region, or use Long Capture to collect a scrolling page into one image. Confirm to copy and save.</p></article>
-          <article class="feature-card feature-card-pin"><b>02</b><h3>Pin to desktop</h3><p>Keep an important screenshot visible while you work. Move it, zoom it, or close it when you are done.</p></article>
+          <article class="feature-card feature-card-pin"><b>02</b><h3>Pin to desktop</h3><p>Keep an important screenshot visible while you work. Drag it, zoom it, or close it when you are done.</p></article>
           <article class="feature-card"><b>03</b><h3>Save and copy automatically</h3><p>Every capture is copied to the clipboard and saved as a timestamped local PNG in one step.</p></article>
+          <article class="feature-card feature-card-translation"><b>04</b><h3>Translate selected text</h3><p>Select text, press the shortcut, and get a readable floating translation panel with copy, read aloud, font size, opacity, pin, settings, and close controls.</p></article>
           <article class="feature-card feature-card-plus"><b>PLUS FEATURE</b><h3>Double-click to go back</h3><p>Double-click empty space in File Explorer to return to the previous folder without reaching for the Back button.</p></article>
         </div>
         <div class="included-row">
@@ -106,8 +110,24 @@
           <span>Timestamped local PNG files</span>
           <span>Mixed-resolution multi-monitor support</span>
           <span>Long-page capture</span>
+          <span>Selected-text translation</span>
+          <span>Remembered panel controls</span>
           <span>Quiet system-tray operation</span>
         </div>
+      </section>
+
+      <section class="demo-section page-width" id="demo">
+        <div class="section-heading compact-heading">
+          <p class="eyebrow"><span></span> See the workflow</p>
+          <h2>From a detail<br /><em>to a decision.</em></h2>
+        </div>
+        <div class="demo-video-wrap">
+          <video class="demo-video" controls preload="metadata" poster="marketing/06-pinned-right.jpg">
+            <source src="marketing/Mouse4-demo-50s.mp4" type="video/mp4" />
+            Your browser does not support embedded video. <a href="marketing/Mouse4-demo-50s.mp4">Open the demo video</a>.
+          </video>
+        </div>
+        <p class="demo-note">Region capture, annotation, long-page stitching, desktop pinning, and selected-text translation in one short workflow. The demo uses real Mouse4 footage.</p>
       </section>
 
       <section class="steps-section page-width" id="how-it-works">
@@ -118,7 +138,7 @@
         <div class="steps-grid">
           <div class="step"><b>1</b><h3>Press the hotkey</h3><p>Bring Mouse4 up whenever you need it.</p></div>
           <div class="step"><b>2</b><h3>Drag a region</h3><p>Select exactly what matters. Nothing more.</p></div>
-          <div class="step"><b>3</b><h3>Paste, save, or pin</h3><p>Use the capture immediately, find it later, or keep it floating above your desktop.</p></div>
+          <div class="step"><b>3</b><h3>Paste, save, translate, or pin</h3><p>Use the result immediately, read it aloud, find it later, or keep it floating above your desktop.</p></div>
         </div>
       </section>
 
@@ -157,6 +177,8 @@
           <details><summary>Do screenshots leave my computer?</summary><p>No. Captures are processed and saved locally by the Windows app.</p></details>
           <details><summary>Can I keep a screenshot visible?</summary><p>Yes. Use Pin to desktop to keep a capture above other windows while you work.</p></details>
           <details><summary>Can I capture a long scrolling page?</summary><p>Yes. Select the page area, choose Long Capture, scroll through the content, then confirm to save and copy one stitched image.</p></details>
+          <details><summary>How does selected-text translation work?</summary><p>Select text in a supported Windows application and press the translation shortcut. Mouse4 shows the result near the selection with controls for copy, reading, font size, opacity, pinning, settings, and close.</p></details>
+          <details><summary>Can I change the translation service?</summary><p>Yes. The translation-only settings page lets you enter the provider, service URL, model, and API key. The key is stored locally using Windows user encryption.</p></details>
         </div>
       </section>
     </main>
@@ -164,7 +186,7 @@
     <footer class="site-footer page-width">
       <a class="brand" href="#top"><img src="logo.ico" alt="" /><span>Mouse4</span></a>
       <span>Fast screenshots for Windows.</span>
-      <div class="footer-links"><a href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.0.30/Mouse4-Setup-1.0.30.exe">Download</a><a href="#pricing">Pricing</a><a href="pin-screenshot-windows.html">Guide</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="mailto:johnwish1590@hotmail.com">Support</a><a href="#top">Back to top &uarr;</a></div>
+      <div class="footer-links"><a href="https://github.com/JohnWish1590/Mouse4/releases/download/v1.1.22/Mouse4-Setup-1.1.22.exe">Download</a><a href="#features">Features</a><a href="#demo">Demo</a><a href="#pricing">Pricing</a><a href="pin-screenshot-windows.html">Guide</a><a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="mailto:johnwish1590@hotmail.com">Support</a><a href="#top">Back to top &uarr;</a></div>
     </footer>
 
     <script src="script.js"></script>
