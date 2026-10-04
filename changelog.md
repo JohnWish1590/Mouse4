@@ -10,6 +10,12 @@ Newer versions are listed first. This is the public release history; private lic
 - Keeps wrapping, panel width, and action placement stable as translated text changes length.
 - Refreshes the public product page, demo video, release notes, and launch copy.
 
+### Public materials
+
+- Adds an English customer demo with English captions, an English translation result, and the complete capture workflow.
+- Adds the direct English demo link to the public README.
+- Keeps application source code, private licensing services, and API credentials out of the public repository.
+
 ## [1.1.21] - 2026-10-04
 
 ### Pinned references
