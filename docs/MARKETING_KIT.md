@@ -81,7 +81,7 @@ Capture a detail. Keep the context. Translate what you need. Mouse4 for Windows.
 ## Publishing checklist
 
 - Confirm the v1.1.22 installer opens and the release asset is available.
-- Publish the product page and verify the video loads from `marketing/Mouse4-demo-50s.mp4`.
+- Publish the product page and verify the English video loads from `marketing/Mouse4-demo-English.mp4`.
 - Use the Reddit draft for the existing r/SideProject channel.
 - Use the Show HN and AlternativeTo drafts only after the account/login step is available.
 - Keep Indie Hackers paused; do not repost there without a new decision.
