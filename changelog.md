@@ -2,6 +2,38 @@
 
 Newer versions are listed first. This is the public release history; private licensing and service credentials are not included.
 
+## [1.4.0] - 2026-10-15
+
+### Send selected webpage text to AI
+
+- Adds a Chrome selection-only context-menu action: **Send to AI** in English Chrome and **发送到AI** in Chinese Chrome.
+- Sends selected webpage text to the same daily ChatGPT conversation and queue used by screenshot handoff.
+- Keeps the workflow Chat-only, protects unrelated drafts, and does not monitor `Ctrl+C`, read the clipboard, or add a Windows system-wide context-menu entry.
+- Keeps the extension interface bilingual while the product name remains English.
+
+### Reliability and release maintenance
+
+- Keeps individual screenshot failures in manual review so later screenshots can continue.
+- Preserves receipt checks, duplicate-send protection, newest-first history, daily conversation naming, and the blank-chat `Instant` preference.
+- Updates the public English README, sales page, installation guide, release notes, and launch copy.
+- Leaves the existing English demo video and page animation unchanged in this release.
+- Application source code, private licensing services, and API credentials remain outside the public repository.
+
+## [1.2.2] - 2026-10-06
+
+### First-capture responsiveness
+
+- Warms the persistent capture worker after startup so the first user screenshot is ready faster.
+- Primes the native overlay and toolbar without taking focus or accepting mouse input.
+- Keeps shortcut readiness independent of warmup and captures a fresh frame for every user request.
+- Records desktop capture duration in milliseconds for performance diagnostics.
+
+### Public materials
+
+- Updates the public English README and sales page to 1.2.2.
+- Adds one-click AI handoff to the current product description and documents the immediate `Sent to AI` feedback shown after the AI action is clicked.
+- Leaves the existing English demo video and page animation unchanged.
+
 ## [1.1.22] - 2026-10-04
 
 ### Translation panel polish

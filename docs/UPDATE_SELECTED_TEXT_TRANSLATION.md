@@ -12,4 +12,4 @@ The default direction is practical for mixed reading: foreign-language text goes
 
 The feature is useful for documentation, research, support tickets, product pages, and any place where translation should be available without covering the source.
 
-[Watch the workflow](https://johnwish1590.github.io/Mouse4/#demo) or [download Mouse4 v1.1.22](https://github.com/JohnWish1590/Mouse4/releases/download/v1.1.22/Mouse4-Setup-1.1.22.exe).
+[Watch the workflow](https://johnwish1590.github.io/Mouse4/#demo) or [download Mouse4 v1.4.0](https://github.com/JohnWish1590/Mouse4/releases/download/v1.4.0/Mouse4-Setup-1.4.0.exe).
