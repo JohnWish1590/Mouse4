@@ -4,12 +4,12 @@
 
 Mouse4 is a focused Windows utility for clean region screenshots, long-page capture, selected-text translation, local saving, and desktop pinning. It keeps the useful part of the workflow close without opening a large editor.
 
-Mouse4 **v1.4.5** is the latest Windows release. It makes text annotations movable after typing; releases 1.4.1–1.4.4 improve Long Capture as you scroll to the actual page bottom. See the changelog for the full version history.
+Mouse4 **v1.4.7** is the latest Windows release. It adds safety limits for long screenshots, saves captured content before automatically ending an idle or memory-limited capture, and protects the existing clipboard during selected-text translation. See the changelog for the full version history.
 
 ## Download
 
-- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.4.5/Mouse4-Setup-1.4.5.exe)
-- [Read the v1.4.5 release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.4.5)
+- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.4.7/Mouse4-Setup-1.4.7.exe)
+- [Read the v1.4.7 release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.4.7)
 - [Visit the product page](https://johnwish1590.github.io/Mouse4/)
 - [Watch the product demo](https://johnwish1590.github.io/Mouse4/#demo)
 - [Watch the English demo video](https://johnwish1590.github.io/Mouse4/marketing/Mouse4-demo-English.mp4)

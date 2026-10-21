@@ -2,6 +2,16 @@
 
 Newer versions are listed first. This is the public release history; private licensing and service credentials are not included.
 
+## [1.4.7] - 2026-10-21
+
+### Safer long screenshots and clipboard handling
+
+- Stops Long Capture before the stitched image exceeds 30,000 px, or earlier when available memory is low.
+- Saves the aligned content already captured when a safety limit is reached. If saving fails, the capture stays open so Finish can be retried.
+- After 60 seconds without input, saves the captured portion and closes Long Capture only after a successful save.
+- Selected-text translation does not overwrite clipboard formats it cannot preserve; it stops first and leaves the clipboard intact.
+- Windows Setup: `Mouse4-Setup-1.4.7.exe`.
+
 ## [1.4.5] - 2026-10-20
 
 ### Move text annotations after typing
