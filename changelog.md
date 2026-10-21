@@ -2,6 +2,55 @@
 
 Newer versions are listed first. This is the public release history; private licensing and service credentials are not included.
 
+## [1.4.5] - 2026-10-20
+
+### Move text annotations after typing
+
+- Pressing Enter commits the text and returns to the normal pointer state.
+- Drag a committed text annotation directly to reposition it within the capture canvas.
+- Turning off the text tool also commits the current text and keeps it movable.
+- Shows a move cursor when the pointer is over a committed text annotation.
+
+## [1.4.4] - 2026-10-16
+
+### Reach the page bottom with the wheel, even from a short selection
+
+- After the page reaches its actual scroll limit, another downward wheel input captures the missing content below the original selection and extends the visible blue frame to the content viewport bottom before Save.
+- Preserves the selected top and width. No dragging or manual frame adjustment is needed.
+- Clicking Long Capture without scrolling leaves the original frame unchanged; it does not jump to the screen bottom.
+- Verifies overlapping pixels before appending the tail and updates the alignment reference to prevent duplicate content on repeated bottom wheels.
+- Keeps idle-wheel cancellation and the verified on-finish tail fallback.
+- Registers capture exclusion before the selection overlay first appears, preventing the overlay mask from entering an initial snapshot.
+
+## [1.4.3] - 2026-10-16
+
+### Preserve the selection and capture the final page tail
+
+- Fixes the 1.4.2 regression that expanded the selection to the screen bottom as soon as Long Capture was clicked, even without wheel input.
+- Keeps the selection and toolbar in place throughout scrolling.
+- On finish at a confirmed page bottom, checks the actual scroll container and captures missing rows below the selection up to the content viewport edge.
+- Appends the tail only when its pixels overlap the last captured viewport; if accessibility is unavailable or the page changes, it keeps the existing capture.
+- Handles Chrome's first accessibility query with a bounded wait for the scroll pattern to become available.
+- Keeps controlled scrolling and idle-input cancellation.
+
+## [1.4.2] - 2026-10-15
+
+### Include the last visible page content in long captures
+
+- Extends a long-capture selection to the current monitor work-area bottom while keeping the selected top and width.
+- Prevents the page from reaching the scrollbar bottom while the final visible content remains below a fixed capture rectangle.
+- Keeps controlled scrolling, viewport-stability checks, and idle-wheel behavior unchanged.
+- Adds regression coverage for bottom anchoring and cross-monitor selections. The automatic frame extension was revised in 1.4.3.
+
+## [1.4.1] - 2026-10-15
+
+### Keep long captures moving to the actual page bottom
+
+- Refreshes the scroll target from the latest real wheel position before each controlled step.
+- Allows a scrollbar just outside the selected pixels to continue the same capture when it belongs to the identified source window.
+- Treats a settled frame with no viewport movement as a stalled scroll and retries once only while wheel input is active.
+- Discards buffered scroll intent after the wheel becomes idle so capture does not continue in the background.
+
 ## [1.4.0] - 2026-10-15
 
 ### Send selected webpage text to AI

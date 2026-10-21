@@ -4,10 +4,12 @@
 
 Mouse4 is a focused Windows utility for clean region screenshots, long-page capture, selected-text translation, local saving, and desktop pinning. It keeps the useful part of the workflow close without opening a large editor.
 
+Mouse4 **v1.4.5** is the latest Windows release. It makes text annotations movable after typing; releases 1.4.1–1.4.4 improve Long Capture as you scroll to the actual page bottom. See the changelog for the full version history.
+
 ## Download
 
-- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.4.0/Mouse4-Setup-1.4.0.exe)
-- [Read the v1.4.0 release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.4.0)
+- [Download Mouse4 for Windows](https://github.com/JohnWish1590/Mouse4/releases/download/v1.4.5/Mouse4-Setup-1.4.5.exe)
+- [Read the v1.4.5 release notes](https://github.com/JohnWish1590/Mouse4/releases/tag/v1.4.5)
 - [Visit the product page](https://johnwish1590.github.io/Mouse4/)
 - [Watch the product demo](https://johnwish1590.github.io/Mouse4/#demo)
 - [Watch the English demo video](https://johnwish1590.github.io/Mouse4/marketing/Mouse4-demo-English.mp4)
@@ -19,7 +21,7 @@ The installer includes a 14-day trial. A lifetime license costs $4.99 as a one-t
 - Capture a screen region with a global hotkey.
 - Copy each capture to the clipboard and save a timestamped PNG locally.
 - Capture long, scrollable pages and stitch them into one complete image.
-- Annotate a capture with rectangles, arrows, and other lightweight markup.
+- Annotate a capture with rectangles, arrows, and other lightweight markup; commit text with Enter, then drag it to reposition.
 - Pin a capture above the desktop, drag it, zoom it, and close it when finished.
 - Support multiple monitors, including mixed-resolution displays.
 - Send a finished screenshot to the Mouse4 for ChatGPT extension with one click.
